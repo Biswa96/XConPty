@@ -5,25 +5,27 @@
 #define mSeconds 1000
 #define BUFF_SIZE 0x200
 
-void PipeListener(HANDLE hPipeIn)
+DWORD PipeListener(HANDLE hPipeIn)
 {
     HANDLE hConsole = X_GetStdHandle(STD_OUTPUT_HANDLE);
     char szBuffer[BUFF_SIZE];
     DWORD dwBytesWritten, dwBytesRead;
-    BOOL fRead;
 
-    do
+    while (ReadFile(hPipeIn, szBuffer, BUFF_SIZE, &dwBytesRead, NULL))
     {
-        fRead = ReadFile(hPipeIn, szBuffer, BUFF_SIZE, &dwBytesRead, NULL);
+        if (dwBytesRead == 0)
+            break;
         WriteFile(hConsole, szBuffer, dwBytesRead, &dwBytesWritten, NULL);
-    } while (fRead && dwBytesRead >= 0);
+    }
+    return TRUE;
 }
 
 #define width 120
 #define height 30
 #ifndef PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE
+#define ProcThreadAttributePseudoConsole 22
 #define PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE \
-    ProcThreadAttributeValue (22, FALSE, TRUE, FALSE)
+    ProcThreadAttributeValue (ProcThreadAttributePseudoConsole, FALSE, TRUE, FALSE)
 #endif
 
 HRESULT XConPty(PWSTR szCommand)
@@ -40,10 +42,13 @@ HRESULT XConPty(PWSTR szCommand)
     STARTUPINFOEXW SInfoEx = { 0 };
     LPPROC_THREAD_ATTRIBUTE_LIST AttrList = NULL;
 
+#ifdef FUN_MODE
+#else
     HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
     DWORD consoleMode;
     GetConsoleMode(hStdOut, &consoleMode);
     hRes = SetConsoleMode(hStdOut, consoleMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+#endif
 
     // Create the pipes to which the ConPTY will connect
     if (X_CreatePipe(&hPipePTYIn, &hPipeOut, NULL, 0) &&
@@ -98,7 +103,13 @@ HRESULT XConPty(PWSTR szCommand)
         &ProcInfo);
 
     if (bRes)
+    {
+#ifdef FUN_MODE
+        WaitForSingleObject(ProcInfo.hThread, INFINITE);
+#else
         WaitForSingleObject(ProcInfo.hThread, nTimes * mSeconds);
+#endif
+    }
     else
         Log(X_GetLastError(), L"CreateProcessW");
 
@@ -113,12 +124,17 @@ HRESULT XConPty(PWSTR szCommand)
     return hRes;
 }
 
-#define STRINGIFY(s) L#s
+#define STRINGIFY(s) L ## #s
 #define XSTRINGIFY(s) STRINGIFY(s)
 #define count XSTRINGIFY(nTimes)
 
+#ifdef FUN_MODE
+    wchar_t szCommand[] = L"ping -t localhost";
+#else
+    wchar_t szCommand[] = L"ping localhost -n " count;
+#endif
+
 int main(void)
 {
-    wchar_t szCommand[] = L"ping localhost -n " count ;
     XConPty(szCommand);
 }

@@ -1,10 +1,23 @@
 # XConPty
 
-Reveal hidden new Pseudo Console APIs in Windows 10 19H1 builds or greater. This repository uses many low level NTDLL APIs (without many error checking steps) and is dedicated to educational purposes. Use the executable file mainly for testing purposes and exploring Windows Consoles. 
+Reveal hidden new Pseudo Console APIs in Windows 10 19H1 builds or greater. This repository uses many low level NTDLL APIs (without many error checking steps) and is dedicated to educational purposes. Use the executable file mainly for testing purposes and exploring Windows Consoles. This is not a pseudo terminal like in UNIX or UNIX-Like systems. 
 
 ## How to use
 
 The executable is a standalone program. Double clicking on it will Ping `localhost` aka. `127.0.0.1` for 10 seconds only. The ping time and ping count can be changed in source code. 
+
+## Fun Mode
+
+This mode disables all the functions or flags and shows behind-the-scene view. Enable this mode by compiling with `/DFUN_MODE` in MSVC (i.e. with cl.exe) or add `-DFUN_MODE` in gcc in mingw toolchain. For further details see `build.bat`, a batch file with `cl.exe` command. What does this mode do? 
+
+<img align=right src=images\Ping_Fun_Mode.PNG>
+
+* Reveal the hidden ConHost.exe window attached with master side. 
+ For example, here XConPty.exe process. 
+* Do not enable VT-100 escape sequence processing mode. 
+ As a result, it shows all escape character. 
+* Ping infinitely until user press Ctrl+C from keyboard. 
+ This results an ORPHAN CONHOST PROCESS. Cool.... :sunglasses: 
 
 ## How to build
 
@@ -26,7 +39,7 @@ src\
                 +-- XConPty: Sample to show the usage of Pseudo Console APIs
 ```
 
-The interesting thing is that `HPCON` isn't `void*` only. Did you find it?
+The interesting thing is that `HPCON` isn't `void*` only. Did you find it? :mag_right: 
 
 ## Acknowledgments
 

@@ -47,16 +47,28 @@ HRESULT X_CreatePseudoConsole(
                 if (!(dwFlags & PSEUDOCONSOLE_INHERIT_CURSOR))
                     InheritCursor = L"";
 
+#ifdef FUN_MODE
+                PCWSTR Format = L"\\\\?\\%s\\system32\\conhost.exe --signal 0x%x --server 0x%x";
                 swprintf_s(
                     ConHost,
                     MAX_PATH,
-                    L"\\\\?\\%s\\system32\\conhost.exe --headless %s--width %hu --height %hu --signal 0x%x --server 0x%x",
+                    Format,
+                    RtlGetNtSystemRoot(),
+                    HandleToULong(ReadPipeHandle),
+                    HandleToULong(hConServer));
+#else
+                PCWSTR Format = L"\\\\?\\%s\\system32\\conhost.exe --headless %s--width %hu --height %hu --signal 0x%x --server 0x%x";
+                swprintf_s(
+                    ConHost,
+                    MAX_PATH,
+                    Format,
                     RtlGetNtSystemRoot(),
                     InheritCursor,
                     size.X,
                     size.Y,
                     HandleToULong(ReadPipeHandle),
                     HandleToULong(hConServer));
+#endif
 
                 // Initialize thread attribute list
                 HANDLE Values[4] = { hConServer, InputHandle, OutputHandle, ReadPipeHandle };
