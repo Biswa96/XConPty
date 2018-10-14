@@ -1,10 +1,15 @@
 # XConPty
 
+[![Build status](https://img.shields.io/appveyor/ci/Biswa96/XConPty.svg?style=for-the-badge)](https://ci.appveyor.com/project/Biswa96/XConPty)
+[![Licence](https://img.shields.io/github/license/Biswa96/XConPty.svg?style=for-the-badge)](https://www.gnu.org/licenses/gpl-3.0.en.html)
+[![Top Language](https://img.shields.io/github/languages/top/Biswa96/XConPty.svg?style=for-the-badge)](https://github.com/Biswa96/XConPty.git)
+[![Code size](https://img.shields.io/github/languages/code-size/Biswa96/XConPty.svg?style=for-the-badge)]()
+
 Reveal hidden new Pseudo Console APIs in Windows 10 19H1 builds or greater. This repository uses many low level NTDLL APIs (without many error checking steps) and is dedicated to educational purposes. Use the executable file mainly for testing purposes and exploring Windows Consoles. This is not a pseudo terminal like in UNIX or UNIX-Like systems. 
 
 ## How to use
 
-The executable is a standalone program. Double clicking on it will Ping `localhost` aka. `127.0.0.1` for 10 seconds only. The ping time and ping count can be changed in source code. 
+Download the compiled executable file from [**Appveyor Builds**](https://ci.appveyor.com/project/Biswa96/XConPty/build/artifacts). Both executable is a standalone program. Double clicking on `XConPty.exe` will Ping `localhost` aka. `127.0.0.1` for 10 seconds only. The ping time and ping count can be changed in source code. Use the `FunXConPty.exe` for the FUN_MODE (see below).
 
 ## Fun Mode
 

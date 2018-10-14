@@ -1,0 +1,29 @@
+#Build worker image
+image: Visual Studio 2017
+
+#Build version format
+version: "#{build}"
+
+#Pull requests do not increment build number
+pull_requests:
+  do_not_increment_build_number: true
+
+#Do not build tags
+skip_tags: true
+
+#Clone directory
+clone_folder: C:\Projects\XConPty
+
+#Run build script
+build_script:
+- cmd: |
+    build.bat
+
+#View file hash after build
+after_build:
+- ps: |
+    Get-FileHash -Algorithm SHA256 -Path .\bin\*.exe | Format-List
+
+#Artifacts after builds
+artifacts:
+    - path: bin\*.exe
