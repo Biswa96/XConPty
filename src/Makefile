@@ -3,8 +3,12 @@
 NAME := XConPty
 BINDIR = ../bin
 CC = gcc
-CFLAGS := -ggdb -m64 -Wall -Wextra
-LIBS := -lNtdll
+CFLAGS := -Os -m64 -Wall -Wextra
+
+#make CCOPT=-DFUN_MODE for fun mode
+CCOPT := 
+
+LIBS := -lNtdll "C:\Windows\System32\ntdll.dll"
 SOURCES := $(wildcard *.c)
 OBJECTS := $(SOURCES:.c=.obj)
 BINS := $(patsubst %.obj,$(BINDIR)/%.obj,$(OBJECTS))
@@ -14,12 +18,12 @@ EXECUTABLE=$(BINDIR)/$(NAME)
 all: $(BINDIR) $(EXECUTABLE)
 
 $(EXECUTABLE): $(BINS)
-	$(CC) $(CFLAGS) $^ $(LIBS) -o $@
+	$(CC) $(CFLAGS) $(CCOPT) $^ $(LIBS) -o $@
 
 $(BINS): $(BINDIR)/%.obj: %.c
-	$(CC) -c $(CFLAGS) -fstack-check $< -o $(BINDIR)/$*.obj
+	$(CC) -c $(CFLAGS) $(CCOPT) -fstack-check $< -o $(BINDIR)/$*.obj
 
 $(BINDIR):
 	@mkdir ..\bin
 
-#END-24#
+#END

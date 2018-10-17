@@ -101,7 +101,9 @@ HRESULT XConPty(PWSTR szCommand)
         NULL,
         &SInfoEx.StartupInfo,
         &ProcInfo);
-
+    
+    // X_ResizePseudoConsole(hpCon, (COORD){ 100, 100 });
+    
     if (bRes)
     {
 #ifdef FUN_MODE

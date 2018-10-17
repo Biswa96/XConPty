@@ -13,6 +13,9 @@ HANDLE X_GetCurrentProcess(
 DWORD X_GetLastError(
     void);
 
+ULONG BaseSetLastNTError(
+    NTSTATUS Status);
+
 BOOL X_InitializeProcThreadAttributeList(
     LPPROC_THREAD_ATTRIBUTE_LIST lpAttributeList,
     DWORD dwAttributeCount,
@@ -75,6 +78,10 @@ HRESULT X_CreatePseudoConsole(
     HANDLE hOutput,
     DWORD dwFlags,
     X_HPCON* hpCon);
+
+HRESULT X_ResizePseudoConsole(
+    X_HPCON hPC,
+    COORD size);
 
 void X_ClosePseudoConsole(
     X_HPCON hpCon);

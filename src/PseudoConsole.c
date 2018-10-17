@@ -68,10 +68,15 @@ HRESULT X_CreatePseudoConsole(
                     size.Y,
                     HandleToULong(ReadPipeHandle),
                     HandleToULong(hConServer));
-#endif
+#endif // FUN_MODE
 
                 // Initialize thread attribute list
-                HANDLE Values[4] = { hConServer, InputHandle, OutputHandle, ReadPipeHandle };
+                HANDLE Values[4] = { NULL };
+                Values[0] = hConServer;
+                Values[1] = InputHandle;
+                Values[2] = OutputHandle;
+                Values[3] = ReadPipeHandle;
+
                 X_InitializeProcThreadAttributeList(NULL, 1, 0, &AttrSize);
                 AttrList = (LPPROC_THREAD_ATTRIBUTE_LIST)malloc(AttrSize);
                 X_InitializeProcThreadAttributeList(AttrList, 1, 0, &AttrSize);
@@ -147,7 +152,51 @@ HRESULT X_CreatePseudoConsole(
     return S_OK;
 }
 
-void X_ClosePseudoConsole(X_HPCON hpCon)
+#define RESIZE_CONHOST_SIGNAL_BUFFER 8
+
+typedef struct _RESIZE_BUFFER {
+    short Flags;
+    short SizeX;
+    short SizeY;
+} RESIZE_BUFFER, *PRESIZE_BUFFER;
+
+HRESULT X_ResizePseudoConsole(
+    X_HPCON hPC,
+    COORD size)
+{
+    NTSTATUS Status;
+    IO_STATUS_BLOCK IoStatusBlock;
+
+    RESIZE_BUFFER Buffer;
+    Buffer.Flags = RESIZE_CONHOST_SIGNAL_BUFFER;
+    Buffer.SizeX = size.X;
+    Buffer.SizeY = size.Y;
+
+    // WriteFile(hPC.hWritePipe, &Buffer, sizeof(RESIZE_BUFFER), NULL, NULL);
+
+    Status = NtWriteFile(
+        hPC.hWritePipe,
+        NULL,
+        NULL,
+        NULL,
+        &IoStatusBlock,
+        &Buffer,
+        sizeof(RESIZE_BUFFER),
+        NULL,
+        NULL);
+
+    if (Status < 0)
+    {
+        long hRes = 0;
+        Log(Status, L"NtWriteFile");
+        hRes = BaseSetLastNTError(Status);
+        return (hRes | 0x80070000);
+    }
+    return ERROR_SUCCESS;
+}
+
+void X_ClosePseudoConsole(
+    X_HPCON hpCon)
 {
     X_TerminateProcess(hpCon.hConHostProcess, 0);
     NtClose(hpCon.hWritePipe);

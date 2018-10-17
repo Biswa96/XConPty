@@ -21,7 +21,7 @@ HANDLE X_GetCurrentProcess(void)
 
 DWORD X_GetLastError(void)
 {
-    return (DWORD)NtCurrentTeb()->Reserved2[0];
+    return (DWORD)(ULONGLONG)NtCurrentTeb()->Reserved2[0];
 }
 
 ULONG BaseSetLastNTError(NTSTATUS Status)
@@ -268,16 +268,13 @@ BOOL X_DuplicateHandle(
     switch (HandleToULong(hSourceHandle))
     {
     case STD_ERROR_HANDLE:
-        hSourceHandle = NtCurrentTeb()->ProcessEnvironmentBlock->
-            ProcessParameters->Reserved2[4];
+        hSourceHandle = UserProcessParameter()->StandardError;
         break;
     case STD_OUTPUT_HANDLE:
-        hSourceHandle = NtCurrentTeb()->ProcessEnvironmentBlock->
-            ProcessParameters->Reserved2[3];
+        hSourceHandle = UserProcessParameter()->StandardOutput;
         break;
     case STD_INPUT_HANDLE:
-        hSourceHandle = NtCurrentTeb()->ProcessEnvironmentBlock->
-            ProcessParameters->Reserved2[2];
+        hSourceHandle = UserProcessParameter()->StandardInput;
         break;
     }
 
@@ -305,16 +302,13 @@ HANDLE X_GetStdHandle(DWORD nStdHandle)
     switch (nStdHandle)
     {
     case STD_ERROR_HANDLE:
-        hSourceHandle = NtCurrentTeb()->ProcessEnvironmentBlock->
-            ProcessParameters->Reserved2[4];
+        hSourceHandle = UserProcessParameter()->StandardError;
         break;
     case STD_OUTPUT_HANDLE:
-        hSourceHandle = NtCurrentTeb()->ProcessEnvironmentBlock->
-            ProcessParameters->Reserved2[3];
+        hSourceHandle = UserProcessParameter()->StandardOutput;
         break;
     case STD_INPUT_HANDLE:
-        hSourceHandle = NtCurrentTeb()->ProcessEnvironmentBlock->
-            ProcessParameters->Reserved2[2];
+        hSourceHandle = UserProcessParameter()->StandardInput;
         break;
     default:
         hSourceHandle = (HANDLE)-1;
@@ -335,16 +329,13 @@ BOOL X_SetHandleInformation(
     switch (HandleToULong(hObject))
     {
     case STD_ERROR_HANDLE:
-        hObject = NtCurrentTeb()->ProcessEnvironmentBlock->
-            ProcessParameters->Reserved2[4];
+        hObject = UserProcessParameter()->StandardError;
         break;
     case STD_OUTPUT_HANDLE:
-        hObject = NtCurrentTeb()->ProcessEnvironmentBlock->
-            ProcessParameters->Reserved2[3];
+        hObject = UserProcessParameter()->StandardOutput;
         break;
     case STD_INPUT_HANDLE:
-        hObject = NtCurrentTeb()->ProcessEnvironmentBlock->
-            ProcessParameters->Reserved2[2];
+        hObject = UserProcessParameter()->StandardInput;
         break;
     }
     
