@@ -4,6 +4,16 @@
 #include <Windows.h>
 #include <winternl.h>
 
+#define NtCurrentProcess()        ((HANDLE)(LONG_PTR)-1)
+#define NtCurrentThread()         ((HANDLE)(LONG_PTR)-2)
+
+// Time processhacker/phlib/include/phsup.h
+#define TICKS_PER_NS ((long long)1 * 10)
+#define TICKS_PER_MS (TICKS_PER_NS * 1000)
+#define TICKS_PER_SEC (TICKS_PER_MS * 1000)
+#define TICKS_PER_MIN (TICKS_PER_SEC * 60)
+
+// Flags for NtCreateNamedPipeFile
 #define FILE_PIPE_BYTE_STREAM_TYPE 0
 #define FILE_PIPE_MESSAGE_TYPE 1
 #define FILE_PIPE_BYTE_STREAM_MODE 0
@@ -84,17 +94,6 @@ typedef struct _X_RTL_USER_PROCESS_PARAMETERS {
     ULONG LoaderThreads;
     UNICODE_STRING RedirectionDllName;
 } X_RTL_USER_PROCESS_PARAMETERS, *X_PRTL_USER_PROCESS_PARAMETERS;
-
-// Type casting used to know placement of standard handles
-// Added in KernelBase.c file
-
-static X_PRTL_USER_PROCESS_PARAMETERS UserProcessParameter(
-    void)
-{
-    return (X_PRTL_USER_PROCESS_PARAMETERS)NtCurrentTeb()->
-        ProcessEnvironmentBlock->
-        ProcessParameters;
-}
 
 NTSTATUS NtCreateNamedPipeFile(
     PHANDLE NamedPipeFileHandle,

@@ -7,9 +7,6 @@ void Log(
     ULONG Result,
     PWSTR Function);
 
-HANDLE X_GetCurrentProcess(
-    void);
-
 DWORD X_GetLastError(
     void);
 
@@ -34,7 +31,7 @@ BOOL X_UpdateProcThreadAttribute(
 BOOL X_CreatePipe(
     PHANDLE hReadPipe,
     PHANDLE hWritePipe,
-    PSECURITY_ATTRIBUTES lpPipeAttributes,
+    LPSECURITY_ATTRIBUTES lpPipeAttributes,
     DWORD nSize);
 
 NTSTATUS X_CreateHandle(
@@ -70,20 +67,28 @@ typedef struct _X_HPCON {
     HANDLE hWritePipe;
     HANDLE hConDrvReference;
     HANDLE hConHostProcess;
-} X_HPCON;
+} X_HPCON, *PX_HPCON;
 
 HRESULT X_CreatePseudoConsole(
-    COORD size,
+    COORD ConsoleSize,
     HANDLE hInput,
     HANDLE hOutput,
     DWORD dwFlags,
-    X_HPCON* hpCon);
+    PX_HPCON hpCon);
+
+#define RESIZE_CONHOST_SIGNAL_BUFFER 8
+
+typedef struct _RESIZE_PSEUDO_CONSOLE_BUFFER {
+    short Flags;
+    short SizeX;
+    short SizeY;
+} RESIZE_PSEUDO_CONSOLE_BUFFER, *PRESIZE_PSEUDO_CONSOLE_BUFFER;
 
 HRESULT X_ResizePseudoConsole(
-    X_HPCON hPC,
+    PX_HPCON hPC,
     COORD size);
 
 void X_ClosePseudoConsole(
-    X_HPCON hpCon);
+    PX_HPCON hpCon);
 
 #endif //KERNELBASE_H

@@ -1,7 +1,9 @@
 #include "ntdll.h"
 #include <stdio.h>
 
-void Log(ULONG Result, PWSTR Function)
+void Log(
+    ULONG Result,
+    PWSTR Function)
 {
     PWSTR MsgBuffer = NULL;
     FormatMessageW(
@@ -10,21 +12,20 @@ void Log(ULONG Result, PWSTR Function)
             FORMAT_MESSAGE_IGNORE_INSERTS),
         NULL, Result, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
         (PWSTR)&MsgBuffer, 0, NULL);
-    wprintf(L"%ls Error: %ld\n%ls\n", Function, (Result & 0xFFFF), MsgBuffer);
+    wprintf(
+        L"%ls Error: %ld\n%ls\n",
+        Function, (Result & 0xFFFF), MsgBuffer);
     LocalFree(MsgBuffer);
 }
 
-HANDLE X_GetCurrentProcess(void)
-{
-    return (HANDLE)-1;
-}
-
-DWORD X_GetLastError(void)
+DWORD X_GetLastError(
+    void)
 {
     return (DWORD)(ULONGLONG)NtCurrentTeb()->Reserved2[0];
 }
 
-ULONG BaseSetLastNTError(NTSTATUS Status)
+ULONG BaseSetLastNTError(
+    NTSTATUS Status)
 {
     ULONG Result;
 
@@ -42,8 +43,7 @@ BOOL X_InitializeProcThreadAttributeList(
     if (dwFlags) {
         // STATUS_INVALID_PARAMETER_3
     }
-    if (dwAttributeCount > sizeof(PROC_THREAD_ATTRIBUTE_ENTRY))
-    {
+    if (dwAttributeCount > sizeof(PROC_THREAD_ATTRIBUTE_ENTRY)) {
         // STATUS_INVALID_PARAMETER_2
     }
 
@@ -52,7 +52,7 @@ BOOL X_InitializeProcThreadAttributeList(
     if (lpAttributeList && *lpSize >= Size)
     {
         lpAttributeList->dwFlags = 0;
-        lpAttributeList->Unknown = 0;
+        lpAttributeList->Unknown = NULL;
         lpAttributeList->Size = dwAttributeCount;
         lpAttributeList->Count = 0;
     }
@@ -62,6 +62,7 @@ BOOL X_InitializeProcThreadAttributeList(
         RtlSetLastWin32Error(ERROR_INSUFFICIENT_BUFFER);
     }
 
+    // Return size if buffer size does not match
     *lpSize = Size;
     return Result;
 }
@@ -114,7 +115,7 @@ BOOL X_UpdateProcThreadAttribute(
 BOOL X_CreatePipe(
     PHANDLE hReadPipe,
     PHANDLE hWritePipe,
-    PSECURITY_ATTRIBUTES lpPipeAttributes,
+    LPSECURITY_ATTRIBUTES lpPipeAttributes,
     DWORD nSize)
 {
     UNICODE_STRING PipeName = { 0 };
@@ -126,8 +127,8 @@ BOOL X_CreatePipe(
     HANDLE DeviceHandle, ReadPipeHandle, WritePipeHandle;
     NTSTATUS Status;
     LARGE_INTEGER DefaultTimeOut;
-    DefaultTimeOut.QuadPart = -1200000000LL;
-    DWORD Size = 0x1000uL;
+    DefaultTimeOut.QuadPart = -2 * TICKS_PER_MIN;
+    DWORD Size = 0x1000;
     if (nSize)
         Size = nSize;
 
@@ -135,7 +136,7 @@ BOOL X_CreatePipe(
     wchar_t DeviceName[] = L"\\Device\\NamedPipe\\";
     PipeName.Buffer = DeviceName;
     PipeName.Length = (USHORT)(sizeof(DeviceName) - sizeof(wchar_t));
-    ObjectAttributes.Length = sizeof(OBJECT_ATTRIBUTES);
+    ObjectAttributes.Length = sizeof(ObjectAttributes);
     ObjectAttributes.ObjectName = &PipeName;
 
     Status = NtOpenFile(
@@ -145,6 +146,7 @@ BOOL X_CreatePipe(
         &IoStatusBlock,
         FILE_SHARE_READ | FILE_SHARE_WRITE,
         FILE_SYNCHRONOUS_IO_NONALERT);
+
     if (Status < 0)
     {
         Log(Status, L"NtOpenFile");
@@ -165,7 +167,7 @@ BOOL X_CreatePipe(
 
     // Create Named Pipe
     ObjectAttributes.RootDirectory = DeviceHandle;
-    ObjectAttributes.Length = sizeof(OBJECT_ATTRIBUTES);
+    ObjectAttributes.Length = sizeof(ObjectAttributes);
     ObjectAttributes.ObjectName = &PipeName;
     ObjectAttributes.Attributes = Attributes;
     ObjectAttributes.SecurityDescriptor = lpSecurityDescriptor;
@@ -186,6 +188,7 @@ BOOL X_CreatePipe(
         Size,
         Size,
         &DefaultTimeOut);
+
     if (Status < 0)
     {
         Log(Status, L"NtCreateNamedPipeFile");
@@ -208,6 +211,7 @@ BOOL X_CreatePipe(
         &IoStatusBlock,
         FILE_SHARE_READ | FILE_SHARE_WRITE,
         FILE_SYNCHRONOUS_IO_NONALERT | FILE_NON_DIRECTORY_FILE);
+
     if (Status < 0)
     {
         Log(Status, L"NtOpenFile");
@@ -233,18 +237,18 @@ NTSTATUS X_CreateHandle(
     OBJECT_ATTRIBUTES ObjectAttributes = { 0 };
     IO_STATUS_BLOCK IoStatusBlock;
     ULONG Attributes = OBJ_CASE_INSENSITIVE;
+    if (IsInheritable)
+        Attributes |= OBJ_INHERIT;
 
     ObjectName.Buffer = Buffer;
     ObjectName.Length = (USHORT)(sizeof(wchar_t) * wcslen(Buffer));
     ObjectName.MaximumLength = (USHORT)(sizeof(wchar_t) * (wcslen(Buffer) + 1));
 
     ObjectAttributes.RootDirectory = RootDirectory;
-    ObjectAttributes.Length = sizeof(OBJECT_ATTRIBUTES);
-    if (IsInheritable)
-        Attributes |= OBJ_INHERIT;
+    ObjectAttributes.Length = sizeof(ObjectAttributes);
     ObjectAttributes.Attributes = Attributes;
     ObjectAttributes.ObjectName = &ObjectName;
-    ObjectAttributes.SecurityDescriptor = NULL;
+
     return NtOpenFile(
         FileHandle,
         DesiredAccess,
@@ -252,6 +256,15 @@ NTSTATUS X_CreateHandle(
         &IoStatusBlock,
         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
         OpenOptions);
+}
+
+// Type casting is used to get standard handles
+X_PRTL_USER_PROCESS_PARAMETERS UserProcessParameter(
+    void)
+{
+    return (X_PRTL_USER_PROCESS_PARAMETERS)NtCurrentTeb()->
+        ProcessEnvironmentBlock->
+        ProcessParameters;
 }
 
 BOOL X_DuplicateHandle(
@@ -284,8 +297,9 @@ BOOL X_DuplicateHandle(
         hTargetProcessHandle,
         lpTargetHandle,
         dwDesiredAccess,
-        bInheritHandle != 0 ? OBJ_INHERIT : 0,
+        bInheritHandle != FALSE ? OBJ_INHERIT : 0,
         dwOptions);
+
     if (Status < 0)
     {
         Log(Status, L"NtDuplicateObject");
@@ -295,7 +309,8 @@ BOOL X_DuplicateHandle(
     return TRUE;
 }
 
-HANDLE X_GetStdHandle(DWORD nStdHandle)
+HANDLE X_GetStdHandle(
+    DWORD nStdHandle)
 {
     HANDLE hSourceHandle;
 
@@ -308,11 +323,14 @@ HANDLE X_GetStdHandle(DWORD nStdHandle)
         hSourceHandle = UserProcessParameter()->StandardOutput;
         break;
     case STD_INPUT_HANDLE:
+        if (UserProcessParameter()->WindowFlags & STARTF_USEHOTKEY)
+            return NULL;
         hSourceHandle = UserProcessParameter()->StandardInput;
         break;
     default:
         hSourceHandle = (HANDLE)-1;
     }
+
     if (hSourceHandle == (HANDLE)-1)
         BaseSetLastNTError(STATUS_INVALID_HANDLE);
     return hSourceHandle;
@@ -323,7 +341,7 @@ BOOL X_SetHandleInformation(
     DWORD dwMask,
     DWORD dwFlags)
 {
-    OBJECT_HANDLE_FLAG_INFORMATION ObjectInformation;
+    OBJECT_HANDLE_FLAG_INFORMATION ObjectInformation = { 0 };
     NTSTATUS Status;
 
     switch (HandleToULong(hObject))
@@ -338,13 +356,14 @@ BOOL X_SetHandleInformation(
         hObject = UserProcessParameter()->StandardInput;
         break;
     }
-    
+
     Status = NtQueryObject(
         hObject,
         (OBJECT_INFORMATION_CLASS)4, //ObjectHandleFlagInformation
         &ObjectInformation,
-        sizeof(OBJECT_HANDLE_FLAG_INFORMATION),
+        sizeof(ObjectInformation),
         NULL);
+
     if (Status < 0)
     {
         Log(Status, L"NtQueryObject");
@@ -353,15 +372,16 @@ BOOL X_SetHandleInformation(
     }
 
     if (dwMask & HANDLE_FLAG_INHERIT)
-        ObjectInformation.Inherit = dwFlags & 1;
+        ObjectInformation.Inherit = dwFlags & HANDLE_FLAG_INHERIT;
     if (dwMask & HANDLE_FLAG_PROTECT_FROM_CLOSE)
-        ObjectInformation.ProtectFromClose = (dwFlags >> 1) & 1;
+        ObjectInformation.ProtectFromClose = (dwFlags >> 1) & HANDLE_FLAG_INHERIT;
 
     Status = NtSetInformationObject(
         hObject,
-        (OBJECT_INFORMATION_CLASS)4,
+        (OBJECT_INFORMATION_CLASS)4, //ObjectHandleFlagInformation
         &ObjectInformation,
-        sizeof(OBJECT_HANDLE_FLAG_INFORMATION));
+        sizeof(ObjectInformation));
+
     if (Status < 0)
     {
         Log(Status, L"NtSetInformationObject");
@@ -372,7 +392,9 @@ BOOL X_SetHandleInformation(
     return TRUE;
 }
 
-BOOL X_TerminateProcess(HANDLE hProcess, UINT uExitCode)
+BOOL X_TerminateProcess(
+    HANDLE hProcess,
+    UINT uExitCode)
 {
     if (!hProcess)
     {

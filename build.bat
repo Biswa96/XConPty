@@ -7,13 +7,13 @@ where cl.exe link.exe
 ::Set Environment Variables
 set NAME=XConPty.exe
 set BINDIR=bin
-set CFLAGS=/c /Os /W4 /Fo%BINDIR%\\
+set CFLAGS=/c /O1 /W4 /MD /nologo /Fo%BINDIR%\\
 set CCOPT=/DFUN_MODE
-set LFLAGS=/MACHINE:X64
+set LFLAGS=/nologo /MACHINE:X64
 set LIBS=ntdll.lib Advapi32.lib
 
 ::Build
-mkdir %BINDIR%
+@mkdir %BINDIR%
 
 rem build normal mode
 cl.exe %CFLAGS% src\*.c

@@ -13,7 +13,7 @@ Download the compiled executable file from [**Appveyor Builds**](https://ci.appv
 
 ## Fun Mode
 
-This mode disables all the functions or flags and shows behind-the-scene view. Enable this mode by compiling with `/DFUN_MODE` in MSVC (i.e. with cl.exe) or add `-DFUN_MODE` in gcc in mingw toolchain. For further details see `build.bat`, a batch file with `cl.exe` command. What does this mode do? 
+This mode shows behind-the-scene view by disabling/removing some flags and strings. Enable this mode by compiling with `/DFUN_MODE` in MSVC (i.e. with cl.exe) or add `-DFUN_MODE` with gcc in mingw-w64 toolchain. For further details see `build.bat`, a batch file with `cl.exe` command. So, what does this mode do? 
 
 <img align=right src=images\Ping_Fun_Mode.PNG>
 
@@ -22,15 +22,16 @@ This mode disables all the functions or flags and shows behind-the-scene view. E
 * Do not enable VT-100 escape sequence processing mode. 
  As a result, it shows all escape character. 
 * Ping infinitely until user press Ctrl+C from keyboard. 
- This results an ORPHAN CONHOST PROCESS. Cool.... :sunglasses: 
+ Closing the reference ConHost window results
+ an ORPHAN CONHOST PROCESS. Cool.... :sunglasses: 
 
 ## How to build
 
-Clone this repository. Open the solution (.sln) or project (.vcxproj) file in Visual Studio and build it. ALternatively, run Visual Studio developer command prompt, go to the cloned folder and run this command: `msbuild.exe /p:Configuration=Debug`. Or run the `build.bat` for release mode. You can also build with mingw-w64 toolchain. Go to the folder in terminal run `mingw32-make` command from mingw-w64/msys2/cygwin. Some values are not defined in mingw-w64 toolchain. It will be updated soon. 
+Clone this repository. Open the solution (.sln) or project (.vcxproj) file in Visual Studio and build it. Alternatively, run Visual Studio developer command prompt, go to the cloned folder and run this command: `msbuild.exe /p:Configuration=Debug`. Or run the `build.bat` for release mode. You can also build with mingw-w64 toolchain. Go to the folder in terminal run `mingw32-make` command from mingw-w64/msys2/cygwin. Some values are not defined in mingw-w64 toolchain. It will be updated soon. 
 
 ## Project Overview
 
-If you are interested only Pseudo Console APIs those are written in `PseudoCosole.c` file. Many required Kernel32 files are written from scratch for better understanding but without many error checking codes. To eliminate confusion, All Kernel32 function names are appended with `X_`. If you want to use only `XConPty.c` file remove `X_` from all the Kernel32 APIs. Here are the overview of source files according to its dependency: 
+If you are interested only Pseudo Console APIs those are written in `PseudoCosole.c` file. Many required Kernel32 files are written from scratch for better understanding but without many error checking codes. To eliminate confusion, All Kernel32 function names are prefixed with `X_`. If you want to use only `XConPty.c` file remove `X_` prefix from all the Kernel32 APIs. Here are the overview of source files according to their dependencies: 
 
 ```
 src\
@@ -44,7 +45,7 @@ src\
                 +-- XConPty: Sample to show the usage of Pseudo Console APIs
 ```
 
-The interesting thing is that `HPCON` isn't `void*` only. Did you find it? :mag_right: 
+The interesting thing is that `HPCON` data type isn't `void*` only. Did you find it? :mag_right: 
 
 ## Acknowledgments
 

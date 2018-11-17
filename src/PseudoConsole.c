@@ -7,23 +7,24 @@
 #endif
 
 HRESULT X_CreatePseudoConsole(
-    COORD size,
+    COORD ConsoleSize,
     HANDLE hInput,
     HANDLE hOutput,
     DWORD dwFlags,
-    X_HPCON* hpCon)
+    PX_HPCON hpCon)
 {
     NTSTATUS Status;
     BOOL bRes;
 
     HANDLE InputHandle = NULL, OutputHandle = NULL;
     HANDLE hConServer = NULL, hConReference;
-    HANDLE hProc = X_GetCurrentProcess();
+    HANDLE hProc = NtCurrentProcess();
     HANDLE ReadPipeHandle, WritePipeHandle;
+    HANDLE Values[4] = { NULL };
     HANDLE hToken = NULL; // Modify this if necessary
 
-    SECURITY_ATTRIBUTES PipeAttributes;
-    wchar_t ConHost[MAX_PATH];
+    SECURITY_ATTRIBUTES PipeAttributes = { 0 };
+    wchar_t ConHostCommand[MAX_PATH];
     size_t AttrSize;
     LPPROC_THREAD_ATTRIBUTE_LIST AttrList = NULL;
     STARTUPINFOEXW SInfoEx = { 0 };
@@ -32,13 +33,19 @@ HRESULT X_CreatePseudoConsole(
     if (X_DuplicateHandle(hProc, hInput, hProc, &InputHandle, 0, TRUE, DUPLICATE_SAME_ACCESS) &&
         X_DuplicateHandle(hProc, hOutput, hProc, &OutputHandle, 0, TRUE, DUPLICATE_SAME_ACCESS))
     {
-        Status = X_CreateHandle(&hConServer, L"\\Device\\ConDrv\\Server", GENERIC_ALL, NULL, TRUE, 0);
+        Status = X_CreateHandle(
+            &hConServer,
+            L"\\Device\\ConDrv\\Server",
+            GENERIC_ALL,
+            NULL,
+            TRUE,
+            0);
 
         if (Status >= 0)
         {
             PipeAttributes.bInheritHandle = FALSE;
             PipeAttributes.lpSecurityDescriptor = NULL;
-            PipeAttributes.nLength = sizeof(SECURITY_ATTRIBUTES);
+            PipeAttributes.nLength = sizeof(PipeAttributes);
 
             if (X_CreatePipe(&ReadPipeHandle, &WritePipeHandle, &PipeAttributes, 0) &&
                 X_SetHandleInformation(ReadPipeHandle, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT))
@@ -49,8 +56,9 @@ HRESULT X_CreatePseudoConsole(
 
 #ifdef FUN_MODE
                 PCWSTR Format = L"\\\\?\\%s\\system32\\conhost.exe --signal 0x%x --server 0x%x";
-                swprintf_s(
-                    ConHost,
+                _snwprintf_s(
+                    ConHostCommand,
+                    MAX_PATH,
                     MAX_PATH,
                     Format,
                     RtlGetNtSystemRoot(),
@@ -58,27 +66,27 @@ HRESULT X_CreatePseudoConsole(
                     HandleToULong(hConServer));
 #else
                 PCWSTR Format = L"\\\\?\\%s\\system32\\conhost.exe --headless %s--width %hu --height %hu --signal 0x%x --server 0x%x";
-                swprintf_s(
-                    ConHost,
+                _snwprintf_s(
+                    ConHostCommand,
+                    MAX_PATH,
                     MAX_PATH,
                     Format,
                     RtlGetNtSystemRoot(),
                     InheritCursor,
-                    size.X,
-                    size.Y,
+                    ConsoleSize.X,
+                    ConsoleSize.Y,
                     HandleToULong(ReadPipeHandle),
                     HandleToULong(hConServer));
 #endif // FUN_MODE
 
                 // Initialize thread attribute list
-                HANDLE Values[4] = { NULL };
                 Values[0] = hConServer;
                 Values[1] = InputHandle;
                 Values[2] = OutputHandle;
                 Values[3] = ReadPipeHandle;
 
                 X_InitializeProcThreadAttributeList(NULL, 1, 0, &AttrSize);
-                AttrList = (LPPROC_THREAD_ATTRIBUTE_LIST)malloc(AttrSize);
+                AttrList = malloc(AttrSize);
                 X_InitializeProcThreadAttributeList(AttrList, 1, 0, &AttrSize);
                 bRes = X_UpdateProcThreadAttribute(
                     AttrList,
@@ -90,8 +98,8 @@ HRESULT X_CreatePseudoConsole(
                     NULL);
 
                 // Assign members of STARTUPINFOEXW
-                SInfoEx.StartupInfo.cb = sizeof(STARTUPINFOEXW);
-                SInfoEx.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+                SInfoEx.StartupInfo.cb = sizeof(SInfoEx);
+                SInfoEx.StartupInfo.dwFlags |= STARTF_USESTDHANDLES;
                 SInfoEx.StartupInfo.hStdInput = InputHandle;
                 SInfoEx.StartupInfo.hStdOutput = OutputHandle;
                 SInfoEx.StartupInfo.hStdError = OutputHandle;
@@ -100,7 +108,7 @@ HRESULT X_CreatePseudoConsole(
                 bRes = CreateProcessAsUserW(
                     hToken,
                     NULL,
-                    ConHost,
+                    ConHostCommand,
                     NULL,
                     NULL,
                     TRUE,
@@ -128,7 +136,7 @@ HRESULT X_CreatePseudoConsole(
                     }
                 }
                 else
-                    Log(X_GetLastError(), L"CreateProcessW");
+                    Log(X_GetLastError(), L"CreateProcessAsUserW");
             }
             else
                 Log(X_GetLastError(), L"CreatePipe");
@@ -152,53 +160,48 @@ HRESULT X_CreatePseudoConsole(
     return S_OK;
 }
 
-#define RESIZE_CONHOST_SIGNAL_BUFFER 8
-
-typedef struct _RESIZE_BUFFER {
-    short Flags;
-    short SizeX;
-    short SizeY;
-} RESIZE_BUFFER, *PRESIZE_BUFFER;
-
 HRESULT X_ResizePseudoConsole(
-    X_HPCON hPC,
+    PX_HPCON hPC,
     COORD size)
 {
+    HRESULT hRes = 0;
     NTSTATUS Status;
     IO_STATUS_BLOCK IoStatusBlock;
 
-    RESIZE_BUFFER Buffer;
-    Buffer.Flags = RESIZE_CONHOST_SIGNAL_BUFFER;
-    Buffer.SizeX = size.X;
-    Buffer.SizeY = size.Y;
+    RESIZE_PSEUDO_CONSOLE_BUFFER ResizeBuffer;
+    ResizeBuffer.Flags = RESIZE_CONHOST_SIGNAL_BUFFER;
+    ResizeBuffer.SizeX = size.X;
+    ResizeBuffer.SizeY = size.Y;
 
     // WriteFile(hPC.hWritePipe, &Buffer, sizeof(RESIZE_BUFFER), NULL, NULL);
 
     Status = NtWriteFile(
-        hPC.hWritePipe,
+        hPC->hWritePipe,
         NULL,
         NULL,
         NULL,
         &IoStatusBlock,
-        &Buffer,
-        sizeof(RESIZE_BUFFER),
+        &ResizeBuffer,
+        sizeof(ResizeBuffer),
         NULL,
         NULL);
 
     if (Status < 0)
     {
-        long hRes = 0;
         Log(Status, L"NtWriteFile");
-        hRes = BaseSetLastNTError(Status);
-        return (hRes | 0x80070000);
+        DWORD ErrCode = X_GetLastError();
+        if (ErrCode > 0)
+            hRes = ErrCode | 0x80070000;
+        else
+            hRes = ErrCode;
     }
-    return ERROR_SUCCESS;
+    return hRes;
 }
 
 void X_ClosePseudoConsole(
-    X_HPCON hpCon)
+    PX_HPCON hpCon)
 {
-    X_TerminateProcess(hpCon.hConHostProcess, 0);
-    NtClose(hpCon.hWritePipe);
-    NtClose(hpCon.hConDrvReference);
+    X_TerminateProcess(hpCon->hConHostProcess, 0);
+    NtClose(hpCon->hWritePipe);
+    NtClose(hpCon->hConDrvReference);
 }
