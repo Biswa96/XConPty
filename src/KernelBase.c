@@ -1,9 +1,7 @@
-#include "ntdll.h"
+#include "WinInternal.h"
 #include <stdio.h>
 
-void Log(
-    ULONG Result,
-    PWSTR Function)
+void Log(ULONG Result, PWSTR Function)
 {
     PWSTR MsgBuffer = NULL;
     FormatMessageW(
@@ -18,18 +16,19 @@ void Log(
     LocalFree(MsgBuffer);
 }
 
-DWORD X_GetLastError(
-    void)
+ULONG X_GetLastError(void)
 {
-    return (DWORD)(ULONGLONG)NtCurrentTeb()->Reserved2[0];
+    return NtCurrentTeb()->LastErrorValue;
 }
 
-ULONG BaseSetLastNTError(
-    NTSTATUS Status)
+HANDLE X_GetProcessHeap(void)
 {
-    ULONG Result;
+    return NtCurrentTeb()->ProcessEnvironmentBlock->ProcessHeap;
+}
 
-    Result = RtlNtStatusToDosError(Status);
+ULONG BaseSetLastNTError(NTSTATUS Status)
+{
+    ULONG Result = RtlNtStatusToDosError(Status);
     RtlSetLastWin32Error(Result);
     return Result;
 }
@@ -48,7 +47,7 @@ BOOL X_InitializeProcThreadAttributeList(
     }
 
     BOOL Result = TRUE;
-    SIZE_T Size = sizeof(PROC_THREAD_ATTRIBUTE_ENTRY) * (dwAttributeCount + 1);
+    ULONG Size = (ULONG)sizeof(PROC_THREAD_ATTRIBUTE_ENTRY) * (dwAttributeCount + 1);
     if (lpAttributeList && *lpSize >= Size)
     {
         lpAttributeList->dwFlags = 0;
@@ -124,8 +123,7 @@ BOOL X_CreatePipe(
 
     PVOID lpSecurityDescriptor = NULL;
     ULONG Attributes = OBJ_CASE_INSENSITIVE; // Always case insensitive
-    HANDLE DeviceHandle, ReadPipeHandle, WritePipeHandle;
-    NTSTATUS Status;
+    HANDLE DeviceHandle = NULL, ReadPipeHandle, WritePipeHandle = NULL;
     LARGE_INTEGER DefaultTimeOut;
     DefaultTimeOut.QuadPart = -2 * TICKS_PER_MIN;
     DWORD Size = 0x1000;
@@ -139,7 +137,7 @@ BOOL X_CreatePipe(
     ObjectAttributes.Length = sizeof(ObjectAttributes);
     ObjectAttributes.ObjectName = &PipeName;
 
-    Status = NtOpenFile(
+    NTSTATUS Status = NtOpenFile(
         &DeviceHandle,
         GENERIC_READ | SYNCHRONIZE,
         &ObjectAttributes,
@@ -147,7 +145,7 @@ BOOL X_CreatePipe(
         FILE_SHARE_READ | FILE_SHARE_WRITE,
         FILE_SYNCHRONOUS_IO_NONALERT);
 
-    if (Status < 0)
+    if (!NT_SUCCESS(Status))
     {
         Log(Status, L"NtOpenFile");
         BaseSetLastNTError(Status);
@@ -167,7 +165,7 @@ BOOL X_CreatePipe(
 
     // Create Named Pipe
     ObjectAttributes.RootDirectory = DeviceHandle;
-    ObjectAttributes.Length = sizeof(ObjectAttributes);
+    ObjectAttributes.Length = sizeof ObjectAttributes;
     ObjectAttributes.ObjectName = &PipeName;
     ObjectAttributes.Attributes = Attributes;
     ObjectAttributes.SecurityDescriptor = lpSecurityDescriptor;
@@ -189,7 +187,7 @@ BOOL X_CreatePipe(
         Size,
         &DefaultTimeOut);
 
-    if (Status < 0)
+    if (!NT_SUCCESS(Status))
     {
         Log(Status, L"NtCreateNamedPipeFile");
         BaseSetLastNTError(Status);
@@ -199,7 +197,7 @@ BOOL X_CreatePipe(
     // Open write handle for the pipe
     ObjectAttributes.RootDirectory = ReadPipeHandle;
     ObjectAttributes.ObjectName = &PipeName;
-    ObjectAttributes.Length = sizeof(OBJECT_ATTRIBUTES);
+    ObjectAttributes.Length = sizeof ObjectAttributes;
     ObjectAttributes.Attributes = Attributes;
     ObjectAttributes.SecurityDescriptor = lpSecurityDescriptor;
     ObjectAttributes.SecurityQualityOfService = NULL;
@@ -212,7 +210,7 @@ BOOL X_CreatePipe(
         FILE_SHARE_READ | FILE_SHARE_WRITE,
         FILE_SYNCHRONOUS_IO_NONALERT | FILE_NON_DIRECTORY_FILE);
 
-    if (Status < 0)
+    if (!NT_SUCCESS(Status))
     {
         Log(Status, L"NtOpenFile");
         BaseSetLastNTError(Status);
@@ -258,13 +256,9 @@ NTSTATUS X_CreateHandle(
         OpenOptions);
 }
 
-// Type casting is used to get standard handles
-X_PRTL_USER_PROCESS_PARAMETERS UserProcessParameter(
-    void)
+PRTL_USER_PROCESS_PARAMETERS UserProcessParameter(void)
 {
-    return (X_PRTL_USER_PROCESS_PARAMETERS)NtCurrentTeb()->
-        ProcessEnvironmentBlock->
-        ProcessParameters;
+    return NtCurrentTeb()->ProcessEnvironmentBlock->ProcessParameters;
 }
 
 BOOL X_DuplicateHandle(
@@ -300,7 +294,7 @@ BOOL X_DuplicateHandle(
         bInheritHandle != FALSE ? OBJ_INHERIT : 0,
         dwOptions);
 
-    if (Status < 0)
+    if (!NT_SUCCESS(Status))
     {
         Log(Status, L"NtDuplicateObject");
         BaseSetLastNTError(Status);
@@ -309,8 +303,7 @@ BOOL X_DuplicateHandle(
     return TRUE;
 }
 
-HANDLE X_GetStdHandle(
-    DWORD nStdHandle)
+HANDLE X_GetStdHandle(DWORD nStdHandle)
 {
     HANDLE hSourceHandle;
 
@@ -341,8 +334,8 @@ BOOL X_SetHandleInformation(
     DWORD dwMask,
     DWORD dwFlags)
 {
-    OBJECT_HANDLE_FLAG_INFORMATION ObjectInformation = { 0 };
     NTSTATUS Status;
+    OBJECT_HANDLE_FLAG_INFORMATION ObjectInformation = { 0 };
 
     switch (HandleToULong(hObject))
     {
@@ -359,12 +352,12 @@ BOOL X_SetHandleInformation(
 
     Status = NtQueryObject(
         hObject,
-        (OBJECT_INFORMATION_CLASS)4, //ObjectHandleFlagInformation
+        ObjectHandleFlagInformation,
         &ObjectInformation,
         sizeof(ObjectInformation),
         NULL);
 
-    if (Status < 0)
+    if (!NT_SUCCESS(Status))
     {
         Log(Status, L"NtQueryObject");
         BaseSetLastNTError(Status);
@@ -378,11 +371,11 @@ BOOL X_SetHandleInformation(
 
     Status = NtSetInformationObject(
         hObject,
-        (OBJECT_INFORMATION_CLASS)4, //ObjectHandleFlagInformation
+        ObjectHandleFlagInformation,
         &ObjectInformation,
         sizeof(ObjectInformation));
 
-    if (Status < 0)
+    if (!NT_SUCCESS(Status))
     {
         Log(Status, L"NtSetInformationObject");
         BaseSetLastNTError(Status);
@@ -392,9 +385,7 @@ BOOL X_SetHandleInformation(
     return TRUE;
 }
 
-BOOL X_TerminateProcess(
-    HANDLE hProcess,
-    UINT uExitCode)
+BOOL X_TerminateProcess(HANDLE hProcess, UINT uExitCode)
 {
     if (!hProcess)
     {
@@ -405,11 +396,10 @@ BOOL X_TerminateProcess(
     // RtlReportSilentProcessExit(); goes to SendMessageToWERService();
     // which opens WerFault.exe aka. User Data Collector
 
-    NTSTATUS Status = NtTerminateProcess(
-        hProcess,
-        uExitCode);
+    NTSTATUS Status;
+    Status = NtTerminateProcess(hProcess, uExitCode);
 
-    if (Status < 0)
+    if (!NT_SUCCESS(Status))
     {
         BaseSetLastNTError(Status);
         return FALSE;

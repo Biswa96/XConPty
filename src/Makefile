@@ -8,7 +8,7 @@ CFLAGS := -Os -m64 -Wall -Wextra
 #make CCOPT=-DFUN_MODE for fun mode
 CCOPT := 
 
-LIBS := -lNtdll "C:\Windows\System32\ntdll.dll"
+LIBS := -lNtdll
 SOURCES := $(wildcard *.c)
 OBJECTS := $(SOURCES:.c=.obj)
 BINS := $(patsubst %.obj,$(BINDIR)/%.obj,$(OBJECTS))

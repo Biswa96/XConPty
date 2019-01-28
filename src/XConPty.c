@@ -1,9 +1,17 @@
 #include "KernelBase.h"
-#include <winternl.h>
+#include "WinInternal.h"
 
 #define nTimes 10
 #define mSeconds 1000
 #define BUFF_SIZE 0x200
+
+#define width 120
+#define height 30
+#ifndef PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE
+#define ProcThreadAttributePseudoConsole 22
+#define PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE \
+    ProcThreadAttributeValue (ProcThreadAttributePseudoConsole, FALSE, TRUE, FALSE)
+#endif
 
 DWORD PipeListener(HANDLE hPipeIn)
 {
@@ -20,17 +28,9 @@ DWORD PipeListener(HANDLE hPipeIn)
     return TRUE;
 }
 
-#define width 120
-#define height 30
-#ifndef PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE
-#define ProcThreadAttributePseudoConsole 22
-#define PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE \
-    ProcThreadAttributeValue (ProcThreadAttributePseudoConsole, FALSE, TRUE, FALSE)
-#endif
-
 HRESULT XConPty(PWSTR szCommand)
 {
-    BOOL bRes;
+    BOOL bRes = 0;
     HRESULT hRes = 0;
 
     HANDLE hPipeIn = NULL, hPipeOut = NULL;
@@ -43,11 +43,12 @@ HRESULT XConPty(PWSTR szCommand)
     LPPROC_THREAD_ATTRIBUTE_LIST AttrList = NULL;
 
 #ifdef FUN_MODE
+    // Do not enable VT-100 control sequences to view raw buffers
 #else
     HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
     DWORD consoleMode;
     GetConsoleMode(hStdOut, &consoleMode);
-    hRes = SetConsoleMode(hStdOut, consoleMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+    bRes = SetConsoleMode(hStdOut, consoleMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
 #endif
 
     // Create the pipes to which the ConPTY will connect
@@ -72,7 +73,7 @@ HRESULT XConPty(PWSTR szCommand)
     // Initialize thread attribute
     size_t AttrSize;
     X_InitializeProcThreadAttributeList(NULL, 1, 0, &AttrSize);
-    AttrList = (LPPROC_THREAD_ATTRIBUTE_LIST)malloc(AttrSize);
+    AttrList = RtlAllocateHeap(X_GetProcessHeap(), HEAP_ZERO_MEMORY, AttrSize);
     X_InitializeProcThreadAttributeList(AttrList, 1, 0, &AttrSize);
     bRes = X_UpdateProcThreadAttribute(
         AttrList,
@@ -85,8 +86,8 @@ HRESULT XConPty(PWSTR szCommand)
     if (!bRes)
         Log(X_GetLastError(), L"UpdateProcThreadAttribute");
 
-    // Initialize startup info struct        
-    SInfoEx.StartupInfo.cb = sizeof(STARTUPINFOEXW);
+    // Initialize startup info struct
+    SInfoEx.StartupInfo.cb = sizeof(SInfoEx);
     SInfoEx.lpAttributeList = AttrList;
 
     bRes = CreateProcessAsUserW(
@@ -118,7 +119,7 @@ HRESULT XConPty(PWSTR szCommand)
     // Cleanup
     NtClose(ProcInfo.hThread);
     NtClose(ProcInfo.hProcess);
-    free(AttrList);
+    RtlFreeHeap(X_GetProcessHeap(), 0, AttrList);
     X_ClosePseudoConsole(&hpCon);
     NtClose(hPipeOut);
     NtClose(hPipeIn);
@@ -131,7 +132,7 @@ HRESULT XConPty(PWSTR szCommand)
 #define count XSTRINGIFY(nTimes)
 
 #ifdef FUN_MODE
-    wchar_t szCommand[] = L"ping -t localhost";
+    wchar_t szCommand[] = L"cmd.exe";
 #else
     wchar_t szCommand[] = L"ping localhost -n " count;
 #endif

@@ -3,12 +3,11 @@
 
 #include <Windows.h>
 
-void Log(
-    ULONG Result,
-    PWSTR Function);
+void Log(ULONG Result, PWSTR Function);
 
-DWORD X_GetLastError(
-    void);
+DWORD X_GetLastError(void);
+
+HANDLE X_GetProcessHeap(void);
 
 ULONG BaseSetLastNTError(
     NTSTATUS Status);
@@ -51,8 +50,7 @@ BOOL X_DuplicateHandle(
     BOOL bInheritHandle,
     DWORD dwOptions);
 
-HANDLE X_GetStdHandle(
-    DWORD nStdHandle);
+HANDLE X_GetStdHandle(DWORD nStdHandle);
 
 BOOL X_SetHandleInformation(
     HANDLE hObject,
@@ -84,11 +82,7 @@ typedef struct _RESIZE_PSEUDO_CONSOLE_BUFFER {
     short SizeY;
 } RESIZE_PSEUDO_CONSOLE_BUFFER, *PRESIZE_PSEUDO_CONSOLE_BUFFER;
 
-HRESULT X_ResizePseudoConsole(
-    PX_HPCON hPC,
-    COORD size);
-
-void X_ClosePseudoConsole(
-    PX_HPCON hpCon);
+HRESULT X_ResizePseudoConsole(PX_HPCON hPC, COORD size);
+void X_ClosePseudoConsole(PX_HPCON hpCon);
 
 #endif //KERNELBASE_H

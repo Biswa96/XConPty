@@ -15,13 +15,15 @@ set LIBS=ntdll.lib Advapi32.lib
 ::Build
 @mkdir %BINDIR%
 
-rem build normal mode
+:: Build normal mode
 cl.exe %CFLAGS% src\*.c
 link.exe %LFLAGS% %LIBS% %BINDIR%\*.obj /OUT:%BINDIR%\%NAME%
 
-rem build fun mode
+:: Build fun mode
 cl.exe %CFLAGS% %CCOPT% src\*.c
 link.exe %LFLAGS% %LIBS% %BINDIR%\*.obj /OUT:%BINDIR%\Fun%NAME%
 
-rem get stats
-dir %BINDIR%\*.exe
+:: Get stats
+dir /b %BINDIR%\*.exe
+pause
+exit /b
