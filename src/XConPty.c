@@ -1,5 +1,6 @@
-#include "KernelBase.h"
 #include "WinInternal.h"
+#include "KernelBase.h"
+#include "PseudoConsole.h"
 
 #define nTimes 10
 #define mSeconds 1000
@@ -13,7 +14,9 @@
     ProcThreadAttributeValue (ProcThreadAttributePseudoConsole, FALSE, TRUE, FALSE)
 #endif
 
-DWORD PipeListener(HANDLE hPipeIn)
+DWORD
+WINAPI
+PipeListener(HANDLE hPipeIn)
 {
     HANDLE hConsole = X_GetStdHandle(STD_OUTPUT_HANDLE);
     char szBuffer[BUFF_SIZE];
@@ -28,7 +31,9 @@ DWORD PipeListener(HANDLE hPipeIn)
     return TRUE;
 }
 
-HRESULT XConPty(PWSTR szCommand)
+HRESULT
+WINAPI
+XConPty(PWSTR szCommand)
 {
     BOOL bRes = 0;
     HRESULT hRes = 0;
@@ -58,8 +63,7 @@ HRESULT XConPty(PWSTR szCommand)
         // Create the Pseudo Console attached to the PTY-end of the pipes
         COORD consoleSize = { width, height };
         hRes = X_CreatePseudoConsole(consoleSize, hPipePTYIn, hPipePTYOut, 0, &hpCon);
-        if (hRes != 0)
-            Log(hRes, L"CreatePseudoConsole");
+        LogResult(hRes, L"CreatePseudoConsole");
 
         NtClose(hPipePTYOut);
         NtClose(hPipePTYIn);
@@ -68,40 +72,38 @@ HRESULT XConPty(PWSTR szCommand)
     // Create & start thread to write
     HANDLE hThread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)PipeListener, hPipeIn, 0, NULL);
     if (hThread == INVALID_HANDLE_VALUE)
-        Log(X_GetLastError(), L"CreateThread");
+        LogResult(X_GetLastError(), L"CreateThread");
 
     // Initialize thread attribute
     size_t AttrSize;
     X_InitializeProcThreadAttributeList(NULL, 1, 0, &AttrSize);
     AttrList = RtlAllocateHeap(X_GetProcessHeap(), HEAP_ZERO_MEMORY, AttrSize);
     X_InitializeProcThreadAttributeList(AttrList, 1, 0, &AttrSize);
-    bRes = X_UpdateProcThreadAttribute(
-        AttrList,
-        0,
-        PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, //0x20016u
-        &hpCon,
-        sizeof(PVOID),
-        NULL,
-        NULL);
+    bRes = X_UpdateProcThreadAttribute(AttrList,
+                                       0,
+                                       PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, //0x20016u
+                                       &hpCon,
+                                       sizeof(PVOID),
+                                       NULL,
+                                       NULL);
     if (!bRes)
-        Log(X_GetLastError(), L"UpdateProcThreadAttribute");
+        LogResult(X_GetLastError(), L"UpdateProcThreadAttribute");
 
     // Initialize startup info struct
-    SInfoEx.StartupInfo.cb = sizeof(SInfoEx);
+    SInfoEx.StartupInfo.cb = sizeof SInfoEx;
     SInfoEx.lpAttributeList = AttrList;
 
-    bRes = CreateProcessAsUserW(
-        hToken,
-        NULL,
-        szCommand,
-        NULL,
-        NULL,
-        FALSE,
-        EXTENDED_STARTUPINFO_PRESENT,
-        NULL,
-        NULL,
-        &SInfoEx.StartupInfo,
-        &ProcInfo);
+    bRes = CreateProcessAsUserW(hToken,
+                                NULL,
+                                szCommand,
+                                NULL,
+                                NULL,
+                                FALSE,
+                                EXTENDED_STARTUPINFO_PRESENT,
+                                NULL,
+                                NULL,
+                                &SInfoEx.StartupInfo,
+                                &ProcInfo);
 
     // X_ResizePseudoConsole(&hpCon, (COORD){ 100, 100 });
 
@@ -114,7 +116,7 @@ HRESULT XConPty(PWSTR szCommand)
 #endif
     }
     else
-        Log(X_GetLastError(), L"CreateProcessW");
+        LogResult(X_GetLastError(), L"CreateProcessAsUserW");
 
     // Cleanup
     NtClose(ProcInfo.hThread);
@@ -137,7 +139,9 @@ HRESULT XConPty(PWSTR szCommand)
     wchar_t szCommand[] = L"ping localhost -n " count;
 #endif
 
-int main(void)
+int
+WINAPI
+main(void)
 {
     XConPty(szCommand);
 }

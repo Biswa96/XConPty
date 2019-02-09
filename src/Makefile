@@ -5,7 +5,7 @@ BINDIR = ../bin
 CC = gcc
 CFLAGS := -Os -m64 -Wall -Wextra
 
-#make CCOPT=-DFUN_MODE for fun mode
+# `make CCOPT=-DFUN_MODE` for fun mode
 CCOPT := 
 
 LIBS := -lNtdll

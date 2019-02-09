@@ -13,6 +13,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\KernelBase.h" />
+    <ClInclude Include="src\PseudoConsole.h" />
     <ClInclude Include="src\WinInternal.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
@@ -27,6 +28,7 @@
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v141</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
+    <SpectreMitigation>false</SpectreMitigation>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">

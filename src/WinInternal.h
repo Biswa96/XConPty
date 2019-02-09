@@ -1,7 +1,11 @@
 #ifndef WININTERNAL_H
 #define WININTERNAL_H
 
+#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+#undef WIN32_LEAN_AND_MEAN
+
+typedef long NTSTATUS;
 
 // From DetoursNT/DetoursNT.h
 #ifndef NT_SUCCESS
@@ -27,11 +31,16 @@
 // Flags from winternl.h
 #define OBJ_INHERIT 2
 #define OBJ_CASE_INSENSITIVE 64
+
 #ifndef __MINGW32__
 #define FILE_CREATE 2
 #define FILE_SYNCHRONOUS_IO_NONALERT 32
 #define FILE_NON_DIRECTORY_FILE 64
 #endif
+
+// Some handmade
+#define ToULong(x) (unsigned long)(unsigned long long)(x)
+#define ToHandle(x) (void*)(unsigned long long)(x)
 
 typedef enum _OBJECT_INFORMATION_CLASS {
     ObjectBasicInformation,
@@ -125,6 +134,9 @@ typedef struct _RTL_USER_PROCESS_PARAMETERS {
     ULONG ProcessGroupId;
     ULONG LoaderThreads;
     UNICODE_STRING RedirectionDllName;
+    UNICODE_STRING HeapPartitionName;
+    PVOID DefaultThreadpoolCpuSetMasks;
+    ULONG DefaultThreadpoolCpuSetMaskCount;
 } RTL_USER_PROCESS_PARAMETERS, *PRTL_USER_PROCESS_PARAMETERS;
 
 typedef struct _PEB {
@@ -139,6 +151,13 @@ typedef struct _TEB {
     PPEB ProcessEnvironmentBlock;
     ULONG LastErrorValue;
 } TEB, *PTEB;
+
+// macros with TEB
+#define NtCurrentPeb() \
+NtCurrentTeb()->ProcessEnvironmentBlock
+
+#define UserProcessParameter() \
+NtCurrentTeb()->ProcessEnvironmentBlock->ProcessParameters
 
 typedef struct _OBJECT_ATTRIBUTES {
     ULONG Length;
@@ -157,87 +176,100 @@ typedef struct _IO_STATUS_BLOCK {
     ULONG_PTR Information;
 } IO_STATUS_BLOCK, *PIO_STATUS_BLOCK;
 
-NTSTATUS NtOpenFile(
-    PHANDLE FileHandle,
-    ACCESS_MASK DesiredAccess,
-    POBJECT_ATTRIBUTES ObjectAttributes,
-    PIO_STATUS_BLOCK IoStatusBlock,
-    ULONG ShareAccess,
-    ULONG OpenOptions);
+NTSTATUS
+NTAPI
+NtClose(HANDLE FileHandle);
 
-NTSTATUS NtClose(
-    HANDLE FileHandle);
+NTSTATUS
+NTAPI
+NtCreateNamedPipeFile(PHANDLE NamedPipeFileHandle,
+                      ACCESS_MASK DesiredAccess,
+                      POBJECT_ATTRIBUTES ObjectAttributes,
+                      PIO_STATUS_BLOCK IoStatusBlock,
+                      ULONG ShareAccess,
+                      ULONG CreateDisposition,
+                      ULONG CreateOptions,
+                      ULONG WriteModeMessage,
+                      ULONG ReadModeMessage,
+                      ULONG NonBlocking,
+                      ULONG MaxInstances,
+                      ULONG InBufferSize,
+                      ULONG OutBufferSize,
+                      PLARGE_INTEGER DefaultTimeOut);
 
-NTSTATUS NtQueryObject(
-    HANDLE FileHandle,
-    OBJECT_INFORMATION_CLASS ObjectInformationClass,
-    PVOID ObjectInformation,
-    ULONG ObjectInformationLength,
-    PULONG ReturnLength);
+NTSTATUS
+NTAPI
+NtDuplicateObject(HANDLE SourceProcessHandle,
+                  HANDLE SourceHandle,
+                  HANDLE TargetProcessHandle,
+                  PHANDLE TargetHandle,
+                  ACCESS_MASK DesiredAccess,
+                  ULONG HandleAttributes,
+                  ULONG Options);
 
-NTSTATUS NtCreateNamedPipeFile(
-    PHANDLE NamedPipeFileHandle,
-    ACCESS_MASK DesiredAccess,
-    POBJECT_ATTRIBUTES ObjectAttributes,
-    PIO_STATUS_BLOCK IoStatusBlock,
-    ULONG ShareAccess,
-    ULONG CreateDisposition,
-    ULONG CreateOptions,
-    ULONG WriteModeMessage,
-    ULONG ReadModeMessage,
-    ULONG NonBlocking,
-    ULONG MaxInstances,
-    ULONG InBufferSize,
-    ULONG OutBufferSize,
-    PLARGE_INTEGER DefaultTimeOut);
+NTSTATUS
+NTAPI
+NtOpenFile(PHANDLE FileHandle,
+           ACCESS_MASK DesiredAccess,
+           POBJECT_ATTRIBUTES ObjectAttributes,
+           PIO_STATUS_BLOCK IoStatusBlock,
+           ULONG ShareAccess,
+           ULONG OpenOptions);
 
-NTSTATUS NtDuplicateObject(
-    HANDLE SourceProcessHandle,
-    HANDLE SourceHandle,
-    HANDLE TargetProcessHandle,
-    PHANDLE TargetHandle,
-    ACCESS_MASK DesiredAccess,
-    ULONG HandleAttributes,
-    ULONG Options);
+NTSTATUS
+NTAPI
+NtQueryObject(HANDLE FileHandle,
+              OBJECT_INFORMATION_CLASS ObjectInformationClass,
+              PVOID ObjectInformation,
+              ULONG ObjectInformationLength,
+              PULONG ReturnLength);
 
-NTSTATUS NtSetInformationObject(
-    HANDLE ObjectHandle,
-    OBJECT_INFORMATION_CLASS ObjectInformationClass,
-    PVOID ObjectInformation,
-    ULONG Length);
+NTSTATUS
+NTAPI
+NtSetInformationObject(HANDLE ObjectHandle,
+                       OBJECT_INFORMATION_CLASS ObjectInformationClass,
+                       PVOID ObjectInformation,
+                       ULONG Length);
 
-NTSTATUS NtTerminateProcess(
-    HANDLE ProcessHandle,
-    NTSTATUS ExitStatus);
+NTSTATUS
+NTAPI
+NtTerminateProcess(HANDLE ProcessHandle,
+                   NTSTATUS ExitStatus);
 
-NTSTATUS NtWriteFile(
-    HANDLE FileHandle,
-    HANDLE Event,
-    PVOID ApcRoutine,
-    PVOID ApcContext,
-    PIO_STATUS_BLOCK IoStatusBlock,
-    PVOID Buffer,
-    ULONG Length,
-    PLARGE_INTEGER ByteOffset,
-    PULONG Key);
+NTSTATUS
+NTAPI
+NtWriteFile(HANDLE FileHandle,
+            HANDLE Event,
+            PVOID ApcRoutine,
+            PVOID ApcContext,
+            PIO_STATUS_BLOCK IoStatusBlock,
+            PVOID Buffer,
+            ULONG Length,
+            PLARGE_INTEGER ByteOffset,
+            PULONG Key);
 
-ULONG RtlNtStatusToDosError(
-    NTSTATUS Status);
+PVOID
+NTAPI
+RtlAllocateHeap(PVOID HeapHandle,
+                ULONG Flags,
+                SIZE_T Size);
 
-PCWSTR RtlGetNtSystemRoot(
-    void);
+BOOLEAN
+NTAPI
+RtlFreeHeap(PVOID HeapHandle,
+            ULONG Flags,
+            PVOID BaseAddress);
 
-void RtlSetLastWin32Error(
-    ULONG LastError);
+PCWSTR
+NTAPI
+RtlGetNtSystemRoot(void);
 
-PVOID RtlAllocateHeap(
-    PVOID HeapHandle,
-    ULONG Flags,
-    SIZE_T Size);
+ULONG
+NTAPI
+RtlNtStatusToDosError(NTSTATUS Status);
 
-BOOLEAN RtlFreeHeap(
-    PVOID HeapHandle,
-    ULONG Flags,
-    PVOID BaseAddress);
+void
+NTAPI
+RtlSetLastWin32Error(ULONG LastError);
 
 #endif //WININTERNAL_H

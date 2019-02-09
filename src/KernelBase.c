@@ -1,43 +1,55 @@
 #include "WinInternal.h"
 #include <stdio.h>
 
-void Log(ULONG Result, PWSTR Function)
+void
+WINAPI
+LogResult(HRESULT hResult,
+          PWSTR Function)
 {
-    PWSTR MsgBuffer = NULL;
-    FormatMessageW(
-        (FORMAT_MESSAGE_ALLOCATE_BUFFER |
-            FORMAT_MESSAGE_FROM_SYSTEM |
-            FORMAT_MESSAGE_IGNORE_INSERTS),
-        NULL, Result, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        (PWSTR)&MsgBuffer, 0, NULL);
-    wprintf(
-        L"%ls Error: %ld\n%ls\n",
-        Function, (Result & 0xFFFF), MsgBuffer);
-    LocalFree(MsgBuffer);
+    if(hResult < 0)
+        wprintf(L"[-] ERROR %ld %ls\n", (hResult & 0xFFFF), Function);
 }
 
-ULONG X_GetLastError(void)
+void
+WINAPI
+LogStatus(NTSTATUS Status,
+          PWSTR Function)
+{
+    if(Status < 0)
+        wprintf(L"[-] NTSTATUS 0x%08lX %ls\n", Status, Function);
+}
+
+ULONG
+WINAPI
+X_GetLastError(void)
 {
     return NtCurrentTeb()->LastErrorValue;
 }
 
-HANDLE X_GetProcessHeap(void)
+HANDLE
+WINAPI
+X_GetProcessHeap(void)
 {
     return NtCurrentTeb()->ProcessEnvironmentBlock->ProcessHeap;
 }
 
-ULONG BaseSetLastNTError(NTSTATUS Status)
+ULONG
+WINAPI
+BaseSetLastNTError(NTSTATUS Status)
 {
-    ULONG Result = RtlNtStatusToDosError(Status);
+    ULONG Result;
+
+    Result = RtlNtStatusToDosError(Status);
     RtlSetLastWin32Error(Result);
     return Result;
 }
 
-BOOL X_InitializeProcThreadAttributeList(
-    LPPROC_THREAD_ATTRIBUTE_LIST lpAttributeList,
-    DWORD dwAttributeCount,
-    DWORD dwFlags,
-    PSIZE_T lpSize)
+BOOL
+WINAPI
+X_InitializeProcThreadAttributeList(LPPROC_THREAD_ATTRIBUTE_LIST lpAttributeList,
+                                    DWORD dwAttributeCount,
+                                    DWORD dwFlags,
+                                    PSIZE_T lpSize)
 {
     if (dwFlags) {
         // STATUS_INVALID_PARAMETER_3
@@ -66,14 +78,15 @@ BOOL X_InitializeProcThreadAttributeList(
     return Result;
 }
 
-BOOL X_UpdateProcThreadAttribute(
-    LPPROC_THREAD_ATTRIBUTE_LIST lpAttributeList,
-    DWORD dwFlags,
-    DWORD_PTR Attribute,
-    PVOID lpValue,
-    SIZE_T cbSize,
-    PVOID lpPreviousValue,
-    PSIZE_T lpReturnSize)
+BOOL
+WINAPI
+X_UpdateProcThreadAttribute(LPPROC_THREAD_ATTRIBUTE_LIST lpAttributeList,
+                            DWORD dwFlags,
+                            DWORD_PTR Attribute,
+                            PVOID lpValue,
+                            SIZE_T cbSize,
+                            PVOID lpPreviousValue,
+                            PSIZE_T lpReturnSize)
 {
     DWORD Flags = 1 << Attribute;
 
@@ -111,19 +124,21 @@ BOOL X_UpdateProcThreadAttribute(
     return TRUE;
 }
 
-BOOL X_CreatePipe(
-    PHANDLE hReadPipe,
-    PHANDLE hWritePipe,
-    LPSECURITY_ATTRIBUTES lpPipeAttributes,
-    DWORD nSize)
+BOOL
+WINAPI
+X_CreatePipe(PHANDLE hReadPipe,
+             PHANDLE hWritePipe,
+             LPSECURITY_ATTRIBUTES lpPipeAttributes,
+             DWORD nSize)
 {
-    UNICODE_STRING PipeName = { 0 };
+    NTSTATUS Status;
+    UNICODE_STRING PipeObject = { 0 };
     OBJECT_ATTRIBUTES ObjectAttributes = { 0 };
     IO_STATUS_BLOCK IoStatusBlock;
 
     PVOID lpSecurityDescriptor = NULL;
     ULONG Attributes = OBJ_CASE_INSENSITIVE; // Always case insensitive
-    HANDLE DeviceHandle = NULL, ReadPipeHandle, WritePipeHandle = NULL;
+    HANDLE DeviceHandle = NULL, ReadPipeHandle = NULL, WritePipeHandle = NULL;
     LARGE_INTEGER DefaultTimeOut;
     DefaultTimeOut.QuadPart = -2 * TICKS_PER_MIN;
     DWORD Size = 0x1000;
@@ -132,28 +147,27 @@ BOOL X_CreatePipe(
 
     // Open NamedPipe device
     wchar_t DeviceName[] = L"\\Device\\NamedPipe\\";
-    PipeName.Buffer = DeviceName;
-    PipeName.Length = (USHORT)(sizeof(DeviceName) - sizeof(wchar_t));
-    ObjectAttributes.Length = sizeof(ObjectAttributes);
-    ObjectAttributes.ObjectName = &PipeName;
+    PipeObject.Buffer = DeviceName;
+    PipeObject.Length = (USHORT)(sizeof DeviceName - sizeof (wchar_t));
+    ObjectAttributes.Length = sizeof ObjectAttributes;
+    ObjectAttributes.ObjectName = &PipeObject;
 
-    NTSTATUS Status = NtOpenFile(
-        &DeviceHandle,
-        GENERIC_READ | SYNCHRONIZE,
-        &ObjectAttributes,
-        &IoStatusBlock,
-        FILE_SHARE_READ | FILE_SHARE_WRITE,
-        FILE_SYNCHRONOUS_IO_NONALERT);
+    Status = NtOpenFile(&DeviceHandle,
+                        GENERIC_READ | SYNCHRONIZE,
+                        &ObjectAttributes,
+                        &IoStatusBlock,
+                        FILE_SHARE_READ | FILE_SHARE_WRITE,
+                        FILE_SYNCHRONOUS_IO_NONALERT);
 
     if (!NT_SUCCESS(Status))
     {
-        Log(Status, L"NtOpenFile");
+        LogStatus(Status, L"NtOpenFile");
         BaseSetLastNTError(Status);
         return FALSE;
     }
 
-    PipeName.Buffer = NULL;
-    PipeName.Length = 0;
+    PipeObject.Buffer = NULL;
+    PipeObject.Length = 0;
 
     // Set security Attributes
     if (lpPipeAttributes)
@@ -166,53 +180,51 @@ BOOL X_CreatePipe(
     // Create Named Pipe
     ObjectAttributes.RootDirectory = DeviceHandle;
     ObjectAttributes.Length = sizeof ObjectAttributes;
-    ObjectAttributes.ObjectName = &PipeName;
+    ObjectAttributes.ObjectName = &PipeObject;
     ObjectAttributes.Attributes = Attributes;
     ObjectAttributes.SecurityDescriptor = lpSecurityDescriptor;
     ObjectAttributes.SecurityQualityOfService = NULL;
 
-    Status = NtCreateNamedPipeFile(
-        &ReadPipeHandle,
-        GENERIC_READ | SYNCHRONIZE | FILE_WRITE_ATTRIBUTES,
-        &ObjectAttributes,
-        &IoStatusBlock,
-        FILE_SHARE_READ | FILE_SHARE_WRITE,
-        FILE_CREATE,
-        FILE_SYNCHRONOUS_IO_NONALERT,
-        FILE_PIPE_BYTE_STREAM_TYPE,
-        FILE_PIPE_BYTE_STREAM_MODE,
-        FILE_PIPE_QUEUE_OPERATION,
-        1,
-        Size,
-        Size,
-        &DefaultTimeOut);
+    Status = NtCreateNamedPipeFile(&ReadPipeHandle,
+                                   GENERIC_READ | SYNCHRONIZE | FILE_WRITE_ATTRIBUTES,
+                                   &ObjectAttributes,
+                                   &IoStatusBlock,
+                                   FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                   FILE_CREATE,
+                                   FILE_SYNCHRONOUS_IO_NONALERT,
+                                   FILE_PIPE_BYTE_STREAM_TYPE,
+                                   FILE_PIPE_BYTE_STREAM_MODE,
+                                   FILE_PIPE_QUEUE_OPERATION,
+                                   1,
+                                   Size,
+                                   Size,
+                                   &DefaultTimeOut);
 
     if (!NT_SUCCESS(Status))
     {
-        Log(Status, L"NtCreateNamedPipeFile");
+        LogStatus(Status, L"NtCreateNamedPipeFile");
         BaseSetLastNTError(Status);
         return FALSE;
     }
 
     // Open write handle for the pipe
     ObjectAttributes.RootDirectory = ReadPipeHandle;
-    ObjectAttributes.ObjectName = &PipeName;
+    ObjectAttributes.ObjectName = &PipeObject;
     ObjectAttributes.Length = sizeof ObjectAttributes;
     ObjectAttributes.Attributes = Attributes;
     ObjectAttributes.SecurityDescriptor = lpSecurityDescriptor;
     ObjectAttributes.SecurityQualityOfService = NULL;
 
-    Status = NtOpenFile(
-        &WritePipeHandle,
-        GENERIC_WRITE | SYNCHRONIZE | FILE_READ_ATTRIBUTES,
-        &ObjectAttributes,
-        &IoStatusBlock,
-        FILE_SHARE_READ | FILE_SHARE_WRITE,
-        FILE_SYNCHRONOUS_IO_NONALERT | FILE_NON_DIRECTORY_FILE);
+    Status = NtOpenFile(&WritePipeHandle,
+                        GENERIC_WRITE | SYNCHRONIZE | FILE_READ_ATTRIBUTES,
+                        &ObjectAttributes,
+                        &IoStatusBlock,
+                        FILE_SHARE_READ | FILE_SHARE_WRITE,
+                        FILE_SYNCHRONOUS_IO_NONALERT | FILE_NON_DIRECTORY_FILE);
 
     if (!NT_SUCCESS(Status))
     {
-        Log(Status, L"NtOpenFile");
+        LogStatus(Status, L"NtOpenFile");
         BaseSetLastNTError(Status);
         return FALSE;
     }
@@ -223,13 +235,14 @@ BOOL X_CreatePipe(
     return TRUE;
 }
 
-NTSTATUS X_CreateHandle(
-    PHANDLE FileHandle,
-    PWSTR Buffer,
-    ACCESS_MASK DesiredAccess,
-    HANDLE RootDirectory,
-    BOOLEAN IsInheritable,
-    ULONG OpenOptions)
+NTSTATUS
+WINAPI
+X_CreateHandle(PHANDLE FileHandle,
+               PWSTR Buffer,
+               ACCESS_MASK DesiredAccess,
+               HANDLE RootDirectory,
+               BOOLEAN IsInheritable,
+               ULONG OpenOptions)
 {
     UNICODE_STRING ObjectName = { 0 };
     OBJECT_ATTRIBUTES ObjectAttributes = { 0 };
@@ -239,71 +252,69 @@ NTSTATUS X_CreateHandle(
         Attributes |= OBJ_INHERIT;
 
     ObjectName.Buffer = Buffer;
-    ObjectName.Length = (USHORT)(sizeof(wchar_t) * wcslen(Buffer));
-    ObjectName.MaximumLength = (USHORT)(sizeof(wchar_t) * (wcslen(Buffer) + 1));
+    ObjectName.Length = (USHORT)(sizeof (wchar_t) * wcslen(Buffer));
+    ObjectName.MaximumLength = (USHORT)(sizeof (wchar_t) * (wcslen(Buffer) + 1));
 
     ObjectAttributes.RootDirectory = RootDirectory;
-    ObjectAttributes.Length = sizeof(ObjectAttributes);
+    ObjectAttributes.Length = sizeof ObjectAttributes;
     ObjectAttributes.Attributes = Attributes;
     ObjectAttributes.ObjectName = &ObjectName;
 
-    return NtOpenFile(
-        FileHandle,
-        DesiredAccess,
-        &ObjectAttributes,
-        &IoStatusBlock,
-        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-        OpenOptions);
+    return NtOpenFile(FileHandle,
+                      DesiredAccess,
+                      &ObjectAttributes,
+                      &IoStatusBlock,
+                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                      OpenOptions);
 }
 
-PRTL_USER_PROCESS_PARAMETERS UserProcessParameter(void)
-{
-    return NtCurrentTeb()->ProcessEnvironmentBlock->ProcessParameters;
-}
-
-BOOL X_DuplicateHandle(
-    HANDLE hSourceProcessHandle,
-    HANDLE hSourceHandle,
-    HANDLE hTargetProcessHandle,
-    LPHANDLE lpTargetHandle,
-    DWORD dwDesiredAccess,
-    BOOL bInheritHandle,
-    DWORD dwOptions)
+BOOL
+WINAPI
+X_DuplicateHandle(HANDLE hSourceProcessHandle,
+                  HANDLE hSourceHandle,
+                  HANDLE hTargetProcessHandle,
+                  LPHANDLE lpTargetHandle,
+                  DWORD dwDesiredAccess,
+                  BOOL bInheritHandle,
+                  DWORD dwOptions)
 {
     NTSTATUS Status;
 
-    switch (HandleToULong(hSourceHandle))
+    switch (ToULong(hSourceHandle))
     {
     case STD_ERROR_HANDLE:
         hSourceHandle = UserProcessParameter()->StandardError;
         break;
+
     case STD_OUTPUT_HANDLE:
         hSourceHandle = UserProcessParameter()->StandardOutput;
         break;
+
     case STD_INPUT_HANDLE:
         hSourceHandle = UserProcessParameter()->StandardInput;
         break;
     }
 
-    Status = NtDuplicateObject(
-        hSourceProcessHandle,
-        hSourceHandle,
-        hTargetProcessHandle,
-        lpTargetHandle,
-        dwDesiredAccess,
-        bInheritHandle != FALSE ? OBJ_INHERIT : 0,
-        dwOptions);
+    Status = NtDuplicateObject(hSourceProcessHandle,
+                               hSourceHandle,
+                               hTargetProcessHandle,
+                               lpTargetHandle,
+                               dwDesiredAccess,
+                               bInheritHandle != FALSE ? OBJ_INHERIT : 0,
+                               dwOptions);
 
     if (!NT_SUCCESS(Status))
     {
-        Log(Status, L"NtDuplicateObject");
+        LogStatus(Status, L"NtDuplicateObject");
         BaseSetLastNTError(Status);
         return FALSE;
     }
     return TRUE;
 }
 
-HANDLE X_GetStdHandle(DWORD nStdHandle)
+HANDLE
+WINAPI
+X_GetStdHandle(DWORD nStdHandle)
 {
     HANDLE hSourceHandle;
 
@@ -312,14 +323,17 @@ HANDLE X_GetStdHandle(DWORD nStdHandle)
     case STD_ERROR_HANDLE:
         hSourceHandle = UserProcessParameter()->StandardError;
         break;
+
     case STD_OUTPUT_HANDLE:
         hSourceHandle = UserProcessParameter()->StandardOutput;
         break;
+
     case STD_INPUT_HANDLE:
         if (UserProcessParameter()->WindowFlags & STARTF_USEHOTKEY)
             return NULL;
         hSourceHandle = UserProcessParameter()->StandardInput;
         break;
+
     default:
         hSourceHandle = (HANDLE)-1;
     }
@@ -329,55 +343,57 @@ HANDLE X_GetStdHandle(DWORD nStdHandle)
     return hSourceHandle;
 }
 
-BOOL X_SetHandleInformation(
-    HANDLE hObject,
-    DWORD dwMask,
-    DWORD dwFlags)
+BOOL
+WINAPI
+X_SetHandleInformation(HANDLE hObject,
+                       DWORD dwMask,
+                       DWORD dwFlags)
 {
     NTSTATUS Status;
     OBJECT_HANDLE_FLAG_INFORMATION ObjectInformation = { 0 };
 
-    switch (HandleToULong(hObject))
+    switch (ToULong(hObject))
     {
     case STD_ERROR_HANDLE:
         hObject = UserProcessParameter()->StandardError;
         break;
+
     case STD_OUTPUT_HANDLE:
         hObject = UserProcessParameter()->StandardOutput;
         break;
+
     case STD_INPUT_HANDLE:
         hObject = UserProcessParameter()->StandardInput;
         break;
     }
 
-    Status = NtQueryObject(
-        hObject,
-        ObjectHandleFlagInformation,
-        &ObjectInformation,
-        sizeof(ObjectInformation),
-        NULL);
+    Status = NtQueryObject(hObject,
+                           ObjectHandleFlagInformation,
+                           &ObjectInformation,
+                           sizeof ObjectInformation,
+                           NULL);
 
     if (!NT_SUCCESS(Status))
     {
-        Log(Status, L"NtQueryObject");
+        LogStatus(Status, L"NtQueryObject");
         BaseSetLastNTError(Status);
         return FALSE;
     }
 
     if (dwMask & HANDLE_FLAG_INHERIT)
         ObjectInformation.Inherit = dwFlags & HANDLE_FLAG_INHERIT;
+
     if (dwMask & HANDLE_FLAG_PROTECT_FROM_CLOSE)
         ObjectInformation.ProtectFromClose = (dwFlags >> 1) & HANDLE_FLAG_INHERIT;
 
-    Status = NtSetInformationObject(
-        hObject,
-        ObjectHandleFlagInformation,
-        &ObjectInformation,
-        sizeof(ObjectInformation));
+    Status = NtSetInformationObject(hObject,
+                                    ObjectHandleFlagInformation,
+                                    &ObjectInformation,
+                                    sizeof ObjectInformation);
 
     if (!NT_SUCCESS(Status))
     {
-        Log(Status, L"NtSetInformationObject");
+        LogStatus(Status, L"NtSetInformationObject");
         BaseSetLastNTError(Status);
         return FALSE;
     }
@@ -385,7 +401,10 @@ BOOL X_SetHandleInformation(
     return TRUE;
 }
 
-BOOL X_TerminateProcess(HANDLE hProcess, UINT uExitCode)
+BOOL
+WINAPI
+X_TerminateProcess(HANDLE hProcess,
+                   UINT uExitCode)
 {
     if (!hProcess)
     {
@@ -401,6 +420,7 @@ BOOL X_TerminateProcess(HANDLE hProcess, UINT uExitCode)
 
     if (!NT_SUCCESS(Status))
     {
+        LogStatus(Status, L"NtTerminateProcess");
         BaseSetLastNTError(Status);
         return FALSE;
     }
