@@ -46,6 +46,24 @@ src\
 
 The interesting thing is that `HPCON` data type isn't `void*` only. Did you find it? :mag_right: 
 
+## ConHost options 
+
+To create a pseudo ConHost process, `CreatePseudoConsole()` uses `CreateProcessAsUserW()` with a command line string (here `ConHostCommand`). That string contains some options. Here are the list with _speculative_ explanation: 
+
+| Options        |  Details  |
+|----------------|-----------|
+| headless       | Hide ConHost window. 
+| inheritcursor  | Inherit/follow the cursor position from server to reference window. 
+| server         | Handle created from `\Device\ConDrv\Server` interface. 
+| signal         | R/W pipe handle. 
+| width          | Console window width (COORD.X). 
+| height         | Console window height (COORD.Y). 
+| vtmode         | win-telnet
+|                | xterm
+|                | xterm-256color
+|                | xterm-ascii
+| feature        | pty
+
 ## Acknowledgments
 
 Thanks to:

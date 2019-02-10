@@ -1,6 +1,10 @@
 #ifndef PSEUDOCONSOLE_H
 #define PSEUDOCONSOLE_H
 
+#ifndef PSEUDOCONSOLE_INHERIT_CURSOR
+#define PSEUDOCONSOLE_INHERIT_CURSOR 1
+#endif
+
 typedef struct _X_HPCON {
     HANDLE hWritePipe;
     HANDLE hConDrvReference;

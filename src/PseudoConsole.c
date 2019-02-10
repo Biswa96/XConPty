@@ -3,9 +3,11 @@
 #include "PseudoConsole.h"
 #include <stdio.h>
 
-#ifndef PSEUDOCONSOLE_INHERIT_CURSOR
-#define PSEUDOCONSOLE_INHERIT_CURSOR 1
-#endif
+// VT modes strings in ConHost command options
+#define VT_PARSE_IO_MODE_XTERM L"xterm"
+#define VT_PARSE_IO_MODE_XTERM_ASCII L"xterm-ascii"
+#define VT_PARSE_IO_MODE_XTERM_256COLOR L"xterm-256color"
+#define VT_PARSE_IO_MODE_WIN_TELNET "win-telnet"
 
 HRESULT
 WINAPI
@@ -58,13 +60,16 @@ X_CreatePseudoConsoleAsUser(HANDLE TokenHandle,
 
 #ifdef FUN_MODE
                 UNREFERENCED_PARAMETER(ConsoleSize);
-                PCWSTR Format = L"\\\\?\\%s\\system32\\conhost.exe %s--signal 0x%x --server 0x%x";
+                PCWSTR Format = L"\\\\?\\%s\\system32\\conhost.exe %s--vtmode %s --signal 0x%x --server 0x%x";
+                PCWSTR VtParseIoMode = VT_PARSE_IO_MODE_XTERM_256COLOR;
+
                 _snwprintf_s(ConHostCommand,
                              MAX_PATH,
                              MAX_PATH,
                              Format,
                              RtlGetNtSystemRoot(),
                              InheritCursor,
+                             VtParseIoMode,
                              ToULong(ReadPipeHandle),
                              ToULong(hConServer));
 #else
