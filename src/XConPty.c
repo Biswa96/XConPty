@@ -37,11 +37,12 @@ XConPty(PWSTR szCommand)
 {
     BOOL bRes = 0;
     HRESULT hRes = 0;
+    ULONG LastError = RtlGetLastWin32Error();
 
     HANDLE hPipeIn = NULL, hPipeOut = NULL;
     X_HPCON hpCon;
     HANDLE hPipePTYIn, hPipePTYOut;
-    HANDLE hToken = NULL; // Modify this if necessary
+    HANDLE HeapHandle = RtlGetProcessHeap(), hToken = NULL; // Modify this if necessary
 
     PROCESS_INFORMATION ProcInfo;
     STARTUPINFOEXW SInfoEx = { 0 };
@@ -70,14 +71,14 @@ XConPty(PWSTR szCommand)
     }
 
     // Create & start thread to write
-    HANDLE hThread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)PipeListener, hPipeIn, 0, NULL);
+    HANDLE hThread = CreateThread(NULL, 0, PipeListener, hPipeIn, 0, NULL);
     if (hThread == INVALID_HANDLE_VALUE)
-        LogResult(X_GetLastError(), L"CreateThread");
+        LogResult(LastError, L"CreateThread");
 
     // Initialize thread attribute
     size_t AttrSize;
     X_InitializeProcThreadAttributeList(NULL, 1, 0, &AttrSize);
-    AttrList = RtlAllocateHeap(X_GetProcessHeap(), HEAP_ZERO_MEMORY, AttrSize);
+    AttrList = RtlAllocateHeap(HeapHandle, HEAP_ZERO_MEMORY, AttrSize);
     X_InitializeProcThreadAttributeList(AttrList, 1, 0, &AttrSize);
     bRes = X_UpdateProcThreadAttribute(AttrList,
                                        0,
@@ -87,7 +88,7 @@ XConPty(PWSTR szCommand)
                                        NULL,
                                        NULL);
     if (!bRes)
-        LogResult(X_GetLastError(), L"UpdateProcThreadAttribute");
+        LogResult(LastError, L"UpdateProcThreadAttribute");
 
     // Initialize startup info struct
     SInfoEx.StartupInfo.cb = sizeof SInfoEx;
@@ -116,12 +117,12 @@ XConPty(PWSTR szCommand)
 #endif
     }
     else
-        LogResult(X_GetLastError(), L"CreateProcessAsUserW");
+        LogResult(LastError, L"CreateProcessAsUserW");
 
     // Cleanup
     NtClose(ProcInfo.hThread);
     NtClose(ProcInfo.hProcess);
-    RtlFreeHeap(X_GetProcessHeap(), 0, AttrList);
+    RtlFreeHeap(HeapHandle, 0, AttrList);
     X_ClosePseudoConsole(&hpCon);
     NtClose(hPipeOut);
     NtClose(hPipeIn);

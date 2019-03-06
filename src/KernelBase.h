@@ -3,21 +3,11 @@
 
 void
 WINAPI
-LogResult(HRESULT hResult,
-          PWSTR Function);
+LogResult(HRESULT hResult, PWSTR Function);
 
 void
 WINAPI
-LogStatus(NTSTATUS Status,
-          PWSTR Function);
-
-ULONG
-WINAPI
-X_GetLastError(void);
-
-HANDLE
-WINAPI
-X_GetProcessHeap(void);
+LogStatus(NTSTATUS Status, PWSTR Function);
 
 ULONG
 WINAPI

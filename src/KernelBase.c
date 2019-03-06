@@ -3,8 +3,7 @@
 
 void
 WINAPI
-LogResult(HRESULT hResult,
-          PWSTR Function)
+LogResult(HRESULT hResult, PWSTR Function)
 {
     if(hResult < 0)
         wprintf(L"[-] ERROR %ld %ls\n", (hResult & 0xFFFF), Function);
@@ -12,25 +11,10 @@ LogResult(HRESULT hResult,
 
 void
 WINAPI
-LogStatus(NTSTATUS Status,
-          PWSTR Function)
+LogStatus(NTSTATUS Status, PWSTR Function)
 {
     if(Status < 0)
         wprintf(L"[-] NTSTATUS 0x%08lX %ls\n", Status, Function);
-}
-
-ULONG
-WINAPI
-X_GetLastError(void)
-{
-    return NtCurrentTeb()->LastErrorValue;
-}
-
-HANDLE
-WINAPI
-X_GetProcessHeap(void)
-{
-    return NtCurrentTeb()->ProcessEnvironmentBlock->ProcessHeap;
 }
 
 ULONG
@@ -132,8 +116,8 @@ X_CreatePipe(PHANDLE hReadPipe,
              DWORD nSize)
 {
     NTSTATUS Status;
-    UNICODE_STRING PipeObject = { 0 };
-    OBJECT_ATTRIBUTES ObjectAttributes = { 0 };
+    UNICODE_STRING PipeObject;
+    OBJECT_ATTRIBUTES ObjectAttributes;
     IO_STATUS_BLOCK IoStatusBlock;
 
     PVOID lpSecurityDescriptor = NULL;
@@ -146,9 +130,10 @@ X_CreatePipe(PHANDLE hReadPipe,
         Size = nSize;
 
     // Open NamedPipe device
-    wchar_t DeviceName[] = L"\\Device\\NamedPipe\\";
-    PipeObject.Buffer = DeviceName;
-    PipeObject.Length = (USHORT)(sizeof DeviceName - sizeof (wchar_t));
+    RtlZeroMemory(&PipeObject, sizeof PipeObject);
+    RtlInitUnicodeString(&PipeObject, L"\\Device\\NamedPipe\\");
+
+    RtlZeroMemory(&ObjectAttributes, sizeof ObjectAttributes);
     ObjectAttributes.Length = sizeof ObjectAttributes;
     ObjectAttributes.ObjectName = &PipeObject;
 
@@ -166,9 +151,6 @@ X_CreatePipe(PHANDLE hReadPipe,
         return FALSE;
     }
 
-    PipeObject.Buffer = NULL;
-    PipeObject.Length = 0;
-
     // Set security Attributes
     if (lpPipeAttributes)
     {
@@ -178,6 +160,7 @@ X_CreatePipe(PHANDLE hReadPipe,
     }
 
     // Create Named Pipe
+    RtlZeroMemory(&PipeObject, sizeof PipeObject);
     ObjectAttributes.RootDirectory = DeviceHandle;
     ObjectAttributes.Length = sizeof ObjectAttributes;
     ObjectAttributes.ObjectName = &PipeObject;
@@ -244,28 +227,30 @@ X_CreateHandle(PHANDLE FileHandle,
                BOOLEAN IsInheritable,
                ULONG OpenOptions)
 {
-    UNICODE_STRING ObjectName = { 0 };
-    OBJECT_ATTRIBUTES ObjectAttributes = { 0 };
+    NTSTATUS Status;
+    UNICODE_STRING ObjectName;
+    OBJECT_ATTRIBUTES ObjectAttributes;
     IO_STATUS_BLOCK IoStatusBlock;
     ULONG Attributes = OBJ_CASE_INSENSITIVE;
     if (IsInheritable)
         Attributes |= OBJ_INHERIT;
 
-    ObjectName.Buffer = Buffer;
-    ObjectName.Length = (USHORT)(sizeof (wchar_t) * wcslen(Buffer));
-    ObjectName.MaximumLength = (USHORT)(sizeof (wchar_t) * (wcslen(Buffer) + 1));
+    RtlZeroMemory(&ObjectName, sizeof ObjectName);
+    RtlInitUnicodeString(&ObjectName, Buffer);
 
+    RtlZeroMemory(&ObjectAttributes, sizeof ObjectAttributes);
     ObjectAttributes.RootDirectory = RootDirectory;
     ObjectAttributes.Length = sizeof ObjectAttributes;
     ObjectAttributes.Attributes = Attributes;
     ObjectAttributes.ObjectName = &ObjectName;
 
-    return NtOpenFile(FileHandle,
+    Status = NtOpenFile(FileHandle,
                       DesiredAccess,
                       &ObjectAttributes,
                       &IoStatusBlock,
                       FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                       OpenOptions);
+    return Status;
 }
 
 BOOL

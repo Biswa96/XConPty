@@ -9,7 +9,7 @@ typedef long NTSTATUS;
 
 // From DetoursNT/DetoursNT.h
 #ifndef NT_SUCCESS
-#define NT_SUCCESS(Status) ((Status) >= 0)
+#define NT_SUCCESS(Status) (Status >= 0)
 #endif
 #define NtCurrentProcess() ((HANDLE)(LONG_PTR)-1)
 #define NtCurrentThread() ((HANDLE)(LONG_PTR)-2)
@@ -152,12 +152,11 @@ typedef struct _TEB {
     ULONG LastErrorValue;
 } TEB, *PTEB;
 
-// macros with TEB
-#define NtCurrentPeb() \
-NtCurrentTeb()->ProcessEnvironmentBlock
-
-#define UserProcessParameter() \
-NtCurrentTeb()->ProcessEnvironmentBlock->ProcessParameters
+// macros with PEB & TEB
+#define RtlGetLastWin32Error() NtCurrentTeb()->LastErrorValue
+#define RtlGetProcessHeap() NtCurrentTeb()->ProcessEnvironmentBlock->ProcessHeap
+#define NtCurrentPeb() NtCurrentTeb()->ProcessEnvironmentBlock
+#define UserProcessParameter() NtCurrentTeb()->ProcessEnvironmentBlock->ProcessParameters
 
 typedef struct _OBJECT_ATTRIBUTES {
     ULONG Length;
@@ -264,6 +263,11 @@ PCWSTR
 NTAPI
 RtlGetNtSystemRoot(void);
 
+void
+NTAPI
+RtlInitUnicodeString(PUNICODE_STRING DestinationString,
+                     PCWSTR SourceString);
+
 ULONG
 NTAPI
 RtlNtStatusToDosError(NTSTATUS Status);
@@ -271,5 +275,11 @@ RtlNtStatusToDosError(NTSTATUS Status);
 void
 NTAPI
 RtlSetLastWin32Error(ULONG LastError);
+
+#undef RtlZeroMemory
+void
+NTAPI
+RtlZeroMemory(PVOID Destination,
+              SIZE_T Length);
 
 #endif //WININTERNAL_H

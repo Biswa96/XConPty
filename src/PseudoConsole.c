@@ -3,11 +3,19 @@
 #include "PseudoConsole.h"
 #include <stdio.h>
 
+// ConHost command format strings
+#define NORMAL_COMMAND_FORMAT \
+    L"\\\\?\\%s\\system32\\conhost.exe --headless %s--width %hu --height %hu --signal 0x%x --server 0x%x"
+
+#define FUN_MODE_COMMAND_FORMAT \
+    L"\\\\?\\%s\\system32\\conhost.exe %s--vtmode %s --signal 0x%x --server 0x%x"
+
+
 // VT modes strings in ConHost command options
 #define VT_PARSE_IO_MODE_XTERM L"xterm"
 #define VT_PARSE_IO_MODE_XTERM_ASCII L"xterm-ascii"
 #define VT_PARSE_IO_MODE_XTERM_256COLOR L"xterm-256color"
-#define VT_PARSE_IO_MODE_WIN_TELNET "win-telnet"
+#define VT_PARSE_IO_MODE_WIN_TELNET L"win-telnet"
 
 HRESULT
 WINAPI
@@ -20,19 +28,22 @@ X_CreatePseudoConsoleAsUser(HANDLE TokenHandle,
 {
     NTSTATUS Status;
     BOOL bRes;
-    ULONG LastError = X_GetLastError();
+    ULONG LastError = RtlGetLastWin32Error();
 
     HANDLE InputHandle = NULL, OutputHandle = NULL;
     HANDLE hConServer = NULL, hConReference;
     HANDLE hProc = NtCurrentProcess();
     HANDLE ReadPipeHandle = NULL, WritePipeHandle = NULL;
-    HANDLE HeapHandle = X_GetProcessHeap();
+    HANDLE HeapHandle = RtlGetProcessHeap();
 
     wchar_t ConHostCommand[MAX_PATH];
     size_t AttrSize;
     LPPROC_THREAD_ATTRIBUTE_LIST AttrList = NULL;
-    STARTUPINFOEXW SInfoEx = { 0 };
-    PROCESS_INFORMATION ProcInfo = { 0 };
+
+    STARTUPINFOEXW SInfoEx;
+    RtlZeroMemory(&SInfoEx, sizeof SInfoEx);
+    PROCESS_INFORMATION ProcInfo;
+    RtlZeroMemory(&ProcInfo, sizeof ProcInfo);
 
     if (X_DuplicateHandle(hProc, hInput, hProc, &InputHandle, 0, TRUE, DUPLICATE_SAME_ACCESS) &&
         X_DuplicateHandle(hProc, hOutput, hProc, &OutputHandle, 0, TRUE, DUPLICATE_SAME_ACCESS))
@@ -60,24 +71,21 @@ X_CreatePseudoConsoleAsUser(HANDLE TokenHandle,
 
 #ifdef FUN_MODE
                 UNREFERENCED_PARAMETER(ConsoleSize);
-                PCWSTR Format = L"\\\\?\\%s\\system32\\conhost.exe %s--vtmode %s --signal 0x%x --server 0x%x";
-                PCWSTR VtParseIoMode = VT_PARSE_IO_MODE_XTERM_256COLOR;
 
                 _snwprintf_s(ConHostCommand,
                              MAX_PATH,
                              MAX_PATH,
-                             Format,
+                             FUN_MODE_COMMAND_FORMAT,
                              RtlGetNtSystemRoot(),
                              InheritCursor,
-                             VtParseIoMode,
+                             VT_PARSE_IO_MODE_XTERM_256COLOR,
                              ToULong(ReadPipeHandle),
                              ToULong(hConServer));
 #else
-                PCWSTR Format = L"\\\\?\\%s\\system32\\conhost.exe --headless %s--width %hu --height %hu --signal 0x%x --server 0x%x";
                 _snwprintf_s(ConHostCommand,
                              MAX_PATH,
                              MAX_PATH,
-                             Format,
+                             NORMAL_COMMAND_FORMAT,
                              RtlGetNtSystemRoot(),
                              InheritCursor,
                              ConsoleSize.X,
@@ -87,7 +95,7 @@ X_CreatePseudoConsoleAsUser(HANDLE TokenHandle,
 #endif // FUN_MODE
 
                 // Initialize thread attribute list
-                HANDLE Values[4] = { NULL };
+                HANDLE Values[4];
                 Values[0] = hConServer;
                 Values[1] = InputHandle;
                 Values[2] = OutputHandle;
@@ -97,12 +105,12 @@ X_CreatePseudoConsoleAsUser(HANDLE TokenHandle,
                 AttrList = RtlAllocateHeap(HeapHandle, HEAP_ZERO_MEMORY, AttrSize);
                 X_InitializeProcThreadAttributeList(AttrList, 1, 0, &AttrSize);
                 bRes = X_UpdateProcThreadAttribute(AttrList,
-                                                        0,
-                                                        PROC_THREAD_ATTRIBUTE_HANDLE_LIST, //0x20002u
-                                                        Values,
-                                                        sizeof Values,
-                                                        NULL,
-                                                        NULL);
+                                                   0,
+                                                   PROC_THREAD_ATTRIBUTE_HANDLE_LIST, //0x20002u
+                                                   Values,
+                                                   sizeof Values,
+                                                   NULL,
+                                                   NULL);
 
                 // Assign members of STARTUPINFOEXW
                 SInfoEx.StartupInfo.cb = sizeof SInfoEx;
@@ -173,21 +181,23 @@ X_CreatePseudoConsole(COORD ConsoleSize,
                       DWORD dwFlags,
                       PX_HPCON hpCon)
 {
+    HRESULT hRes;
     HANDLE TokenHandle = NULL;
-    return X_CreatePseudoConsoleAsUser(TokenHandle,
+    hRes = X_CreatePseudoConsoleAsUser(TokenHandle,
                                        ConsoleSize,
                                        hInput,
                                        hOutput,
                                        dwFlags,
                                        hpCon);
+    return hRes;
 }
 
 HRESULT 
 WINAPI
-X_ResizePseudoConsole(PX_HPCON hPC,
+X_ResizePseudoConsole(PX_HPCON hPCon,
                       COORD ConsoleSize)
 {
-    HRESULT hRes = 0;
+    HRESULT hRes = ERROR_SUCCESS;
     NTSTATUS Status;
     IO_STATUS_BLOCK IoStatusBlock;
 
@@ -196,7 +206,7 @@ X_ResizePseudoConsole(PX_HPCON hPC,
     ResizeBuffer.SizeX = ConsoleSize.X;
     ResizeBuffer.SizeY = ConsoleSize.Y;
 
-    Status = NtWriteFile(hPC->hWritePipe,
+    Status = NtWriteFile(hPCon->hWritePipe,
                          NULL,
                          NULL,
                          NULL,
@@ -209,7 +219,8 @@ X_ResizePseudoConsole(PX_HPCON hPC,
     if (!NT_SUCCESS(Status))
     {
         LogStatus(Status, L"NtWriteFile");
-        DWORD ErrCode = X_GetLastError();
+        DWORD ErrCode = RtlGetLastWin32Error();
+
         if (ErrCode > 0)
             hRes = ErrCode | 0x80070000;
         else
@@ -218,7 +229,7 @@ X_ResizePseudoConsole(PX_HPCON hPC,
     return hRes;
 }
 
-VOID
+void
 WINAPI
 X_ClosePseudoConsole(PX_HPCON hpCon)
 {

@@ -38,10 +38,10 @@ typedef struct _RESIZE_PSEUDO_CONSOLE_BUFFER {
 
 HRESULT
 WINAPI
-X_ResizePseudoConsole(PX_HPCON hPC,
+X_ResizePseudoConsole(PX_HPCON hPCon,
                       COORD ConsoleSize);
 
-VOID
+void
 WINAPI
 X_ClosePseudoConsole(PX_HPCON hpCon);
 
