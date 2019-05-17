@@ -3,7 +3,7 @@
 NAME := XConPty
 BINDIR = ../bin
 CC = gcc
-CFLAGS := -Os -m64 -Wall -Wextra
+CFLAGS := -std=c99 -O2 -m64 -Wall -Wextra
 
 # `make CCOPT=-DFUN_MODE` for fun mode
 CCOPT := 
