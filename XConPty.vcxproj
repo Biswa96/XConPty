@@ -7,14 +7,11 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\KernelBase.c" />
     <ClCompile Include="src\XConPty.c" />
     <ClCompile Include="src\PseudoConsole.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\KernelBase.h" />
     <ClInclude Include="src\PseudoConsole.h" />
-    <ClInclude Include="src\WinInternal.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

@@ -5,44 +5,46 @@
 #define PSEUDOCONSOLE_INHERIT_CURSOR 1
 #endif
 
-typedef struct _X_HPCON {
+typedef struct _HPCON_INTERNAL
+{
     HANDLE hWritePipe;
     HANDLE hConDrvReference;
     HANDLE hConHostProcess;
-} X_HPCON, *PX_HPCON;
+} HPCON_INTERNAL, *PHPCON_INTERNAL;
 
-HRESULT
+BOOL
 WINAPI
-X_CreatePseudoConsoleAsUser(HANDLE TokenHandle,
-                            COORD ConsoleSize,
-                            HANDLE hInput,
-                            HANDLE hOutput,
-                            DWORD dwFlags,
-                            PX_HPCON hpCon);
+CreatePseudoConsoleAsUser_mod(HANDLE TokenHandle,
+                              COORD ConsoleSize,
+                              HANDLE hInput,
+                              HANDLE hOutput,
+                              DWORD dwFlags,
+                              PHPCON_INTERNAL hpCon);
 
-HRESULT
+BOOL
 WINAPI
-X_CreatePseudoConsole(COORD ConsoleSize,
-                      HANDLE hInput,
-                      HANDLE hOutput,
-                      DWORD dwFlags,
-                      PX_HPCON hpCon);
+CreatePseudoConsole_mod(COORD ConsoleSize,
+                        HANDLE hInput,
+                        HANDLE hOutput,
+                        DWORD dwFlags,
+                        PHPCON_INTERNAL hpCon);
 
 #define RESIZE_CONHOST_SIGNAL_BUFFER 8
 
-typedef struct _RESIZE_PSEUDO_CONSOLE_BUFFER {
+typedef struct _RESIZE_PSEUDO_CONSOLE_BUFFER
+{
     USHORT Flags;
     USHORT SizeX;
     USHORT SizeY;
 } RESIZE_PSEUDO_CONSOLE_BUFFER, *PRESIZE_PSEUDO_CONSOLE_BUFFER;
 
-HRESULT
+BOOL
 WINAPI
-X_ResizePseudoConsole(PX_HPCON hPCon,
-                      COORD ConsoleSize);
+ResizePseudoConsole_mod(PHPCON_INTERNAL hPCon,
+                        COORD ConsoleSize);
 
 void
 WINAPI
-X_ClosePseudoConsole(PX_HPCON hpCon);
+ClosePseudoConsole_mod(PHPCON_INTERNAL hpCon);
 
-#endif // PSEUDOCONSOLE_H
+#endif /* PSEUDOCONSOLE_H */

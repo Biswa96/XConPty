@@ -2,13 +2,12 @@
 
 NAME := XConPty
 BINDIR = ../bin
-CC = gcc
-CFLAGS := -std=c99 -O2 -m64 -Wall -Wextra
+CFLAGS := -std=c89 -O2 -m64 -Wall -Wextra
 
 # `make CCOPT=-DFUN_MODE` for fun mode
 CCOPT := 
 
-LIBS := -lNtdll
+LIBS := -lAdvapi32 -lNtdll
 SOURCES := $(wildcard *.c)
 OBJECTS := $(SOURCES:.c=.obj)
 BINS := $(patsubst %.obj,$(BINDIR)/%.obj,$(OBJECTS))
@@ -21,7 +20,7 @@ $(EXECUTABLE): $(BINS)
 	$(CC) $(CFLAGS) $(CCOPT) $^ $(LIBS) -o $@
 
 $(BINS): $(BINDIR)/%.obj: %.c
-	$(CC) -c $(CFLAGS) $(CCOPT) -fstack-check $< -o $(BINDIR)/$*.obj
+	$(CC) -c $(CFLAGS) $(CCOPT) $< -o $(BINDIR)/$*.obj
 
 $(BINDIR):
 	@mkdir ..\bin
