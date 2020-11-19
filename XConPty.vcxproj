@@ -43,10 +43,9 @@
     <ClCompile>
       <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>FUN_MODE</PreprocessorDefinitions>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>ntdll.lib;Advapi32.lib</AdditionalDependencies>
+      <AdditionalDependencies>ntdll.lib</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
