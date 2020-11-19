@@ -1,18 +1,8 @@
-#include <Windows.h>
+#include <windows.h>
 #include <assert.h>
 #include "PseudoConsole.h"
 
-#define nTimes 10
-#define mSeconds 1000
 #define BUFF_SIZE 0x200
-
-#define width 120
-#define height 30
-#ifndef PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE
-#define ProcThreadAttributePseudoConsole 22
-#define PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE \
-    ProcThreadAttributeValue (ProcThreadAttributePseudoConsole, FALSE, TRUE, FALSE)
-#endif
 
 DWORD WINAPI PipeListener(HANDLE hPipeIn)
 {
@@ -29,29 +19,26 @@ DWORD WINAPI PipeListener(HANDLE hPipeIn)
     return TRUE;
 }
 
-HRESULT WINAPI XConPty(PWSTR szCommand)
+int WINAPI main(void)
 {
     BOOL bRes;
 
     HANDLE hPipeIn = NULL, hPipeOut;
     HANDLE hPipePTYIn, hPipePTYOut;
-    HPCON_INTERNAL hpCon;
-
-#ifdef FUN_MODE
-    /* Do not enable VT-100 control sequences to view raw buffers */
-#else
-    HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
-    DWORD consoleMode;
-    GetConsoleMode(hStdOut, &consoleMode);
-    bRes = SetConsoleMode(hStdOut, consoleMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
-#endif
+    HPCON hpCon = NULL;
 
     /* Create the pipes to which the ConPTY will connect */
     if (CreatePipe(&hPipePTYIn, &hPipeOut, NULL, 0)
         && CreatePipe(&hPipeIn, &hPipePTYOut, NULL, 0))
     {
         /* Create the Pseudo Console attached to the PTY-end of the pipes */
-        COORD consoleSize = { width, height };
+        COORD consoleSize = { 0 };
+        CONSOLE_SCREEN_BUFFER_INFO csbi = { 0 };
+        if (GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi))
+        {
+            consoleSize.X = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+            consoleSize.Y = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+        }
         bRes = CreatePseudoConsole_mod(consoleSize, hPipePTYIn, hPipePTYOut, 0, &hpCon);
         assert(bRes == 0);
 
@@ -69,8 +56,9 @@ HRESULT WINAPI XConPty(PWSTR szCommand)
     InitializeProcThreadAttributeList(NULL, 1, 0, &AttrSize);
     AttrList = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, AttrSize);
     InitializeProcThreadAttributeList(AttrList, 1, 0, &AttrSize);
-    bRes = UpdateProcThreadAttribute(AttrList, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, /* 0x20016u */
-                                     &hpCon, sizeof(&hpCon), NULL, NULL);
+    bRes = UpdateProcThreadAttribute(
+        AttrList, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, /* 0x20016u */
+        hpCon, sizeof hpCon, NULL, NULL);
     assert(bRes != 0);
 
     /* Initialize startup info struct */
@@ -81,10 +69,11 @@ HRESULT WINAPI XConPty(PWSTR szCommand)
     SInfoEx.StartupInfo.cb = sizeof SInfoEx;
     SInfoEx.lpAttributeList = AttrList;
 
-    bRes = CreateProcessAsUserW(
+    wchar_t Command[] = L"cmd.exe";
+
+    bRes = CreateProcessW(
         NULL,
-        NULL,
-        szCommand,
+        Command,
         NULL,
         NULL,
         FALSE,
@@ -96,37 +85,15 @@ HRESULT WINAPI XConPty(PWSTR szCommand)
     assert(bRes != 0);
 
     if (bRes)
-    {
-#ifdef FUN_MODE
         WaitForSingleObject(ProcInfo.hThread, INFINITE);
-#else
-        WaitForSingleObject(ProcInfo.hThread, nTimes * mSeconds);
-#endif
-    }
 
     /* Cleanup */
     CloseHandle(ProcInfo.hThread);
     CloseHandle(ProcInfo.hProcess);
     HeapFree(GetProcessHeap(), 0, AttrList);
-    ClosePseudoConsole_mod(&hpCon);
+    ClosePseudoConsole_mod(hpCon);
     CloseHandle(hPipeOut);
     CloseHandle(hPipeIn);
 
     return bRes;
-}
-
-#define STRINGIFY(s) L ## #s
-#define XSTRINGIFY(s) STRINGIFY(s)
-#define count XSTRINGIFY(nTimes)
-
-#ifdef FUN_MODE
-    wchar_t szCommand[] = L"cmd.exe";
-#else
-    wchar_t szCommand[] = L"ping localhost -n " count;
-#endif
-
-int WINAPI main(void)
-{
-    XConPty(szCommand);
-    return 0;
 }

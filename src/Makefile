@@ -2,12 +2,10 @@
 
 NAME := XConPty
 BINDIR = ../bin
-CFLAGS := -std=c89 -O2 -m64 -Wall -Wextra
+CFLAGS := -std=c99 -O2 -Wall -Wextra -Wpedantic
+CCOPT = -D_WIN32_WINNT=0x0A000006 -DUNICODE -D_UNICODE
 
-# `make CCOPT=-DFUN_MODE` for fun mode
-CCOPT := 
-
-LIBS := -lAdvapi32 -lNtdll
+LIBS := -lntdll
 SOURCES := $(wildcard *.c)
 OBJECTS := $(SOURCES:.c=.obj)
 BINS := $(patsubst %.obj,$(BINDIR)/%.obj,$(OBJECTS))
@@ -24,5 +22,3 @@ $(BINS): $(BINDIR)/%.obj: %.c
 
 $(BINDIR):
 	@mkdir ..\bin
-
-#END

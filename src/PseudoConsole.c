@@ -1,4 +1,4 @@
-#include <Windows.h>
+#include <windows.h>
 #include <winternl.h>
 #include <assert.h>
 #include <stdio.h>
@@ -9,29 +9,16 @@
 /* Get SystemRoot folder, imported from ntdll */
 PCWSTR NTAPI RtlGetNtSystemRoot(void);
 
-/* ConHost command format strings */
-#define NORMAL_COMMAND_FORMAT \
-    L"\\\\?\\%s\\system32\\conhost.exe --headless %s--width %hu --height %hu --signal 0x%x --server 0x%x"
-
-#define FUN_MODE_COMMAND_FORMAT \
-    L"\\\\?\\%s\\system32\\conhost.exe %s--vtmode %s --signal 0x%x --server 0x%x"
-
-/* VT modes strings in ConHost command options */
-#define VT_PARSE_IO_MODE_XTERM L"xterm"
-#define VT_PARSE_IO_MODE_XTERM_ASCII L"xterm-ascii"
-#define VT_PARSE_IO_MODE_XTERM_256COLOR L"xterm-256color"
-#define VT_PARSE_IO_MODE_WIN_TELNET L"win-telnet"
-
 NTSTATUS
 WINAPI
-CreateHandle(PHANDLE FileHandle,
-             PWSTR Buffer,
-             ACCESS_MASK DesiredAccess,
-             HANDLE RootDirectory,
-             BOOLEAN IsInheritable,
-             ULONG OpenOptions)
+CreateHandle(
+    PHANDLE FileHandle,
+    PWSTR Buffer,
+    ACCESS_MASK DesiredAccess,
+    HANDLE RootDirectory,
+    BOOLEAN IsInheritable,
+    ULONG OpenOptions)
 {
-    NTSTATUS Status;
     IO_STATUS_BLOCK IoStatusBlock;
     ULONG Attributes = OBJ_CASE_INSENSITIVE;
     if (IsInheritable)
@@ -48,23 +35,23 @@ CreateHandle(PHANDLE FileHandle,
     ObjectAttributes.Attributes = Attributes;
     ObjectAttributes.ObjectName = &ObjectName;
 
-    Status = NtOpenFile(FileHandle,
-                        DesiredAccess,
-                        &ObjectAttributes,
-                        &IoStatusBlock,
-                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                        OpenOptions);
-    return Status;
+    return NtOpenFile(
+        FileHandle,
+        DesiredAccess,
+        &ObjectAttributes,
+        &IoStatusBlock,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        OpenOptions);
 }
 
-BOOL
+HRESULT
 WINAPI
-CreatePseudoConsoleAsUser_mod(HANDLE TokenHandle,
-                              COORD ConsoleSize,
-                              HANDLE hInput,
-                              HANDLE hOutput,
-                              DWORD dwFlags,
-                              PHPCON_INTERNAL hpCon)
+CreatePseudoConsole_mod(
+    COORD size,
+    HANDLE hInput,
+    HANDLE hOutput,
+    DWORD dwFlags,
+    HPCON *phPC)
 {
     NTSTATUS Status;
     BOOL bRes;
@@ -81,7 +68,8 @@ CreatePseudoConsoleAsUser_mod(HANDLE TokenHandle,
                            0, TRUE, DUPLICATE_SAME_ACCESS);
     assert(bRes != 0);
 
-    Status = CreateHandle(&hConServer, L"\\Device\\ConDrv\\Server", GENERIC_ALL, NULL, TRUE, 0);
+    Status = CreateHandle(&hConServer, L"\\Device\\ConDrv\\Server",
+                          GENERIC_ALL, NULL, TRUE, 0);
     assert(Status == 0);
 
     HANDLE ReadPipeHandle, WritePipeHandle;
@@ -103,46 +91,30 @@ CreatePseudoConsoleAsUser_mod(HANDLE TokenHandle,
 
     wchar_t ConHostCommand[MAX_PATH];
 
-#ifdef FUN_MODE
-    UNREFERENCED_PARAMETER(ConsoleSize);
+    /* ConHost command format strings */
+#define COMMAND_FORMAT \
+    L"\\\\?\\%s\\system32\\conhost.exe %s--width %hu --height %hu --signal 0x%x --server 0x%x"
 
-    _snwprintf_s(
+    swprintf_s(
         ConHostCommand,
         MAX_PATH,
-        MAX_PATH,
-        FUN_MODE_COMMAND_FORMAT,
+        COMMAND_FORMAT,
         RtlGetNtSystemRoot(),
         InheritCursor,
-        VT_PARSE_IO_MODE_XTERM_256COLOR,
+        size.X,
+        size.Y,
         HandleToULong(ReadPipeHandle),
         HandleToULong(hConServer));
-#else
-    _snwprintf_s(
-        ConHostCommand,
-        MAX_PATH,
-        MAX_PATH,
-        NORMAL_COMMAND_FORMAT,
-        RtlGetNtSystemRoot(),
-        InheritCursor,
-        ConsoleSize.X,
-        ConsoleSize.Y,
-        HandleToULong(ReadPipeHandle),
-        HandleToULong(hConServer));
-#endif /* FUN_MODE */
 
     /* Initialize thread attribute list */
-    HANDLE Values[4];
-    Values[0] = hConServer;
-    Values[1] = InputHandle;
-    Values[2] = OutputHandle;
-    Values[3] = ReadPipeHandle;
-
+    HANDLE Values[4] = { hConServer, InputHandle, OutputHandle, ReadPipeHandle };
     size_t AttrSize;
     LPPROC_THREAD_ATTRIBUTE_LIST AttrList = NULL;
     InitializeProcThreadAttributeList(NULL, 1, 0, &AttrSize);
-    AttrList = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, AttrSize);
+    AttrList = HeapAlloc(GetProcessHeap(), 0, AttrSize);
     InitializeProcThreadAttributeList(AttrList, 1, 0, &AttrSize);
-    bRes = UpdateProcThreadAttribute(AttrList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, /* 0x20002u */
+    bRes = UpdateProcThreadAttribute(AttrList, 0,
+                                     PROC_THREAD_ATTRIBUTE_HANDLE_LIST, /* 0x20002u */
                                      Values, sizeof Values, NULL, NULL);
     assert(bRes != 0);
 
@@ -158,8 +130,7 @@ CreatePseudoConsoleAsUser_mod(HANDLE TokenHandle,
     SInfoEx.StartupInfo.hStdError = OutputHandle;
     SInfoEx.lpAttributeList = AttrList;
 
-    bRes = CreateProcessAsUserW(
-        TokenHandle,
+    bRes = CreateProcessW(
         NULL,
         ConHostCommand,
         NULL,
@@ -172,18 +143,23 @@ CreatePseudoConsoleAsUser_mod(HANDLE TokenHandle,
         &ProcInfo);
     assert(bRes != 0);
 
-    Status = CreateHandle(&hConReference,
-                          L"\\Reference",
-                          GENERIC_READ | GENERIC_WRITE | SYNCHRONIZE,
-                          hConServer,
-                          FALSE,
-                          FILE_SYNCHRONOUS_IO_NONALERT);
+    Status = CreateHandle(
+        &hConReference,
+        L"\\Reference",
+        GENERIC_READ | GENERIC_WRITE | SYNCHRONIZE,
+        hConServer,
+        FALSE,
+        FILE_SYNCHRONOUS_IO_NONALERT);
     assert(Status == 0);
 
     /* Return handles to caller */
+    HPCON_INTERNAL * hpCon = (HPCON_INTERNAL *)HeapAlloc(GetProcessHeap(), 0, sizeof(*hpCon));
     hpCon->hWritePipe = WritePipeHandle;
     hpCon->hConDrvReference = hConReference;
     hpCon->hConHostProcess = ProcInfo.hProcess;
+
+    /* Dereference HPCON pointer to HPCON_INTERNAL structure pointer */
+    *phPC = hpCon;
 
     /* Cleanup */
     HeapFree(GetProcessHeap(), 0, AttrList);
@@ -196,48 +172,33 @@ CreatePseudoConsoleAsUser_mod(HANDLE TokenHandle,
     return 0;
 }
 
-BOOL
-WINAPI
-CreatePseudoConsole_mod(COORD ConsoleSize,
-                        HANDLE hInput,
-                        HANDLE hOutput,
-                        DWORD dwFlags,
-                        PHPCON_INTERNAL hpCon)
-{
-    BOOL bRes;
-    HANDLE TokenHandle = NULL;
-    bRes = CreatePseudoConsoleAsUser_mod(TokenHandle, ConsoleSize,
-                                          hInput, hOutput, dwFlags, hpCon);
-    return bRes;
-}
-
-BOOL
-WINAPI
-ResizePseudoConsole_mod(PHPCON_INTERNAL hPCon,
-                        COORD ConsoleSize)
+HRESULT WINAPI ResizePseudoConsole_mod(HPCON hPC, COORD size)
 {
     BOOL bRes;
 
     RESIZE_PSEUDO_CONSOLE_BUFFER ResizeBuffer;
     memset(&ResizeBuffer, 0, sizeof ResizeBuffer);
     ResizeBuffer.Flags = RESIZE_CONHOST_SIGNAL_BUFFER;
-    ResizeBuffer.SizeX = ConsoleSize.X;
-    ResizeBuffer.SizeY = ConsoleSize.Y;
+    ResizeBuffer.SizeX = size.X;
+    ResizeBuffer.SizeY = size.Y;
 
-    bRes = WriteFile(hPCon->hWritePipe,
-                     &ResizeBuffer,
-                     sizeof ResizeBuffer,
-                     NULL,
-                     NULL);
+    HPCON_INTERNAL *hpCon = (HPCON_INTERNAL *)hPC;
+
+    bRes = WriteFile(
+        hpCon->hWritePipe,
+        &ResizeBuffer,
+        sizeof ResizeBuffer,
+        NULL,
+        NULL);
     assert(bRes != 0);
     return 0;
 }
 
-void
-WINAPI
-ClosePseudoConsole_mod(PHPCON_INTERNAL hpCon)
+void WINAPI ClosePseudoConsole_mod(HPCON hPC)
 {
     DWORD ExitCode;
+
+    HPCON_INTERNAL *hpCon = (HPCON_INTERNAL *)hPC;
 
     CloseHandle(hpCon->hWritePipe);
 
@@ -250,4 +211,6 @@ ClosePseudoConsole_mod(PHPCON_INTERNAL hpCon)
     TerminateProcess(hpCon->hConHostProcess, 0);
 
     CloseHandle(hpCon->hConDrvReference);
+
+    HeapFree(GetProcessHeap(), 0, hpCon);
 }
